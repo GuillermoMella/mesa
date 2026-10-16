@@ -210,7 +210,7 @@ function pintarCombate(cb){
   const s=cb.shalock; if(!s)return;
   const r=s.recursos;
   const pips=(n,max)=>n==null?"–":`<span class="pips">${"●".repeat(Math.max(0,n))}<span class="vacio">${"○".repeat(Math.max(0,(max||n)-n))}</span></span>`;
-  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],["Espacios paladín",pips(r.espacios_paladin,2)],["Pacto",pips(r.espacios_pacto,1)],["Maldición",pips(r.maldicion,1)],["Imposición",r.imposicion??"–"],["Reacción",s.reaccion_usada?"usada":"disponible"]]
+  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],...Object.entries(r.espacios||{}).map(([n,e])=>[`Espacios nivel ${n}`,pips(e.restantes,e.max)]),[`Pacto (nivel ${r.pacto?r.pacto.nivel:"–"})`,r.pacto?pips(r.pacto.restantes,r.pacto.max):"–"],["Maldición",pips(r.maldicion,1)],["Imposición",r.imposicion??"–"],["Reacción",s.reaccion_usada?"usada":"disponible"]]
     .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${v}</b></div>`).join("");
   const ef=s.efectos;
   $("efectos").innerHTML=[s.concentracion?`Concentrado: ${s.concentracion}`:"",ef.bendecido?"Bendecido (+1d4)":"",ef.maldicion?`Maldición: ${ef.maldicion}`:"",ef.maleficio?`Maleficio: ${ef.maleficio}`:""].filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
@@ -224,7 +224,17 @@ function pintarCombate(cb){
 }
 
 // Campos que pide cada elección.
-function selector(key,lista,etiqueta){return `<label>${etiqueta}<select data-k="${key}">${lista.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label>`}
+function selector(key,lista,etiqueta){return `<label>${etiqueta}<select data-k="${key}">${lista.map(x=>typeof x==="object"?`<option value="${esc(x.v)}">${esc(x.t)}</option>`:`<option>${esc(x)}</option>`).join("")}</select></label>`}
+// Espacios que alcanzan para un conjuro de nivel «minimo»: «1», «2»… (multiclase) o «pacto».
+function espacios(minimo=1){
+  const r=combate.shalock.recursos, out=[];
+  Object.entries(r.espacios||{}).forEach(([n,e])=>{if(Number(n)>=minimo&&e.restantes>0)out.push({v:n,t:`nivel ${n} (${e.restantes} de ${e.max})`})});
+  if(r.pacto&&r.pacto.restantes>0&&r.pacto.nivel>=minimo)out.push({v:"pacto",t:`pacto, nivel ${r.pacto.nivel} (${r.pacto.restantes} de ${r.pacto.max})`});
+  return out;
+}
+const nivelDe=v=>v==="pacto"?combate.shalock.recursos.pacto.nivel:Number(v||1);
+// Máximo de criaturas según el nivel del espacio (Bendición 3, Heroísmo y Orden 1; +1 por nivel extra).
+const maxObjetivos=(o,p)=>(o.max_base||1)+nivelDe(form.c[`${p}_espacio`])-(o.nivel||1);
 function campos(p,valor){
   if(!valor)return "";
   const s=combate.shalock, h=[];
@@ -238,19 +248,21 @@ function campos(p,valor){
     return h.join("");
   }
   const o=opcion(valor.slice(3));
-  h.push(`<div class="estado">${esc(o.efecto)}</div>`);
+  h.push(`<div class="estado">${esc(o.efecto)}${o.escala?`<br>A nivel superior: ${esc(o.escala)}.`:""}</div>`);
+  if(o.espacio)h.push(selector(`${p}_espacio`,espacios(o.nivel||1),"Espacio de conjuro"));
   if(o.objetivo==="enemigo")h.push(selector(`${p}_objetivo`,enemigos(),"Blanco"));
   if(o.objetivo==="aliado")h.push(selector(`${p}_objetivo`,aliados(),"A quién"));
-  if(o.objetivo==="aliados3")h.push(`<div class="opciones">${aliados().map(x=>`<label><input type="checkbox" data-k="${p}_bend_${esc(x)}"> ${esc(x)}</label>`).join("")}</div>`);
-  if(o.espacio)h.push(selector(`${p}_espacio`,espacios(),"Espacio de conjuro"));
+  if(o.objetivo==="aliados"||o.objetivo==="enemigos"){
+    const lista=o.objetivo==="aliados"?aliados():enemigos();
+    h.push(`<div class="estado">Hasta ${maxObjetivos(o,p)} criatura(s) con este espacio.</div><div class="opciones">${lista.map(x=>`<label><input type="checkbox" data-k="${p}_obj_${esc(x)}"> ${esc(x)}</label>`).join("")}</div>`);
+  }
   if(o.caracteristica)h.push(selector(`${p}_car`,["FUE","DES","CON","INT","SAB","CAR"],"Característica (desventaja en sus pruebas)"));
   if(o.palabra)h.push(`<label>Palabra<input data-k="${p}_palabra" placeholder="Huye, Suelta, Al suelo…"></label>`);
   if(o.puntos)h.push(`<label>Puntos de la reserva<input type="number" min="1" max="${s.recursos.imposicion}" data-k="${p}_puntos"></label>`);
   return h.join("");
 }
-function espacios(){const r=combate.shalock.recursos;return[...(r.espacios_paladin>0?["paladín"]:[]),...(r.espacios_pacto>0?["pacto"]:[])]}
 function restaurar(){document.querySelectorAll("[data-k]").forEach(el=>{const v=form.c[el.dataset.k];if(v===undefined)return;if(el.type==="checkbox")el.checked=v;else el.value=v});document.querySelectorAll("[data-k]").forEach(el=>{if(el.type!=="checkbox"&&form.c[el.dataset.k]===undefined)form.c[el.dataset.k]=el.value})}
-document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;revisar()});
+document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
 $("selAccion").onchange=ev=>{form.accion=ev.target.value;pintarCombate(combate)};
 document.querySelectorAll("input[name=ordenAd]").forEach(x=>x.onchange=()=>{form.orden=x.value});
@@ -265,12 +277,12 @@ function revisar(){
   if(conc.length>1)avisos.push(`Solo una concentración: ${conc[1].nombre} termina ${conc[0].nombre}.`);
   if(conc.length&&s.concentracion)avisos.push(`Dejas de concentrarte en ${s.concentracion}.`);
   if(ad&&ad.espacio&&ac&&ac.espacio)bloqueos.push("Si conjuras con la acción adicional, con la acción solo puedes lanzar un truco.");
-  const gasto={"paladín":0,"pacto":0};
-  if(ad&&ad.espacio)gasto[form.c.ad_espacio]++; if(ac&&ac.espacio)gasto[form.c.ac_espacio]++;
-  if(gasto["paladín"]>(s.recursos.espacios_paladin||0)||gasto["pacto"]>(s.recursos.espacios_pacto||0))bloqueos.push("No te alcanzan los espacios de conjuro.");
+  const gasto={};
+  [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.espacio){const k=form.c[`${p}_espacio`];if(!k)bloqueos.push(`${o.nombre}: no te quedan espacios de nivel suficiente.`);else gasto[k]=(gasto[k]||0)+1}});
+  Object.entries(gasto).forEach(([k,n])=>{const e=k==="pacto"?s.recursos.pacto:s.recursos.espacios[k];if(!e||n>e.restantes)bloqueos.push("No te alcanzan los espacios de conjuro.")});
   if(ad&&ad.id==="maldicion"&&!s.recursos.maldicion)bloqueos.push("La Maldición ya se usó; vuelve con un descanso.");
   if(ac&&ac.id==="imposicion"&&!(Number(form.c.ac_puntos)>0&&Number(form.c.ac_puntos)<=s.recursos.imposicion))bloqueos.push("Indica cuántos puntos de la reserva usas.");
-  if(ac&&ac.objetivo==="aliados3"){const n=aliados().filter(x=>form.c[`ac_bend_${x}`]).length;if(!n||n>3)bloqueos.push("Bendición: elige de 1 a 3 criaturas.")}
+  [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
   if(!form.accion&&!form.adicional)bloqueos.push("Elige al menos una acción.");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
@@ -292,9 +304,9 @@ function describir(p,valor){
   if(valor.startsWith("atq:"))return{tipo:"ataque",id:valor.slice(4)};
   const o=opcion(valor.slice(3)), x={tipo:"opcion",id:o.id,nombre:o.nombre};
   if(o.objetivo==="enemigo"||o.objetivo==="aliado")x.objetivo=form.c[`${p}_objetivo`];
-  if(o.objetivo==="aliados3")x.objetivos=aliados().filter(a=>form.c[`${p}_bend_${a}`]);
+  if(o.objetivo==="aliados"||o.objetivo==="enemigos")x.objetivos=(o.objetivo==="aliados"?aliados():enemigos()).filter(a=>form.c[`${p}_obj_${a}`]);
   if(o.objetivo==="propio")x.objetivo="Shalock";
-  if(o.espacio)x.espacio=form.c[`${p}_espacio`];
+  if(o.espacio){x.espacio=form.c[`${p}_espacio`];x.nivel=nivelDe(x.espacio)}
   if(o.caracteristica)x.caracteristica=form.c[`${p}_car`];
   if(o.palabra)x.palabra=form.c[`${p}_palabra`]||"";
   if(o.puntos)x.puntos=Number(form.c[`${p}_puntos`]);
@@ -305,10 +317,10 @@ function describir(p,valor){
 function tirarTurno(){
   const s=combate.shalock, ad=describir("ad",form.adicional), ac=describir("ac",form.accion);
   // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
-  let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=false;
-  if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=true}
+  let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
+  if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
   if(ac&&ac.tipo==="ataque")Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,form.c.ac_ventaja?"ventaja":form.c.ac_desventaja?"desventaja":null,{maldicion,maleficio,abrasador}));
-  if(ac&&ac.id==="curar")ac.curacion=tirarExpr("1d8+4",false,false);
+  if(ac&&ac.id==="curar")ac.curacion=tirarExpr(`${ac.nivel||1}d8+4`,false,false);
   return{tipo:"turno",adicional:ad,accion:ac,orden:form.orden,notas:form.notas,ts:Date.now()};
 }
 
@@ -334,7 +346,7 @@ function pintarDano(){
   $("opcDano").hidden=!v.impacta;
   const a=ataque(enCurso.id), esp=espacios();
   $("lblCastigoDano").hidden=!(a&&a.castigo&&esp.length);
-  $("espCastigo").innerHTML=esp.map(x=>`<option>${x}</option>`).join("");
+  $("espCastigo").innerHTML=esp.map(x=>`<option value="${x.v}">${esc(x.t)} → ${Math.min(5,1+nivelDe(x.v))}d8</option>`).join("");
   if(!v.impacta)$("cerrarDano").hidden=false;
 }
 $("cerrarDano").onclick=()=>{enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;pintarDano()};
@@ -344,9 +356,10 @@ $("tirarDano").addEventListener("click",async()=>{
     const danos=[Object.assign(tirarExpr(a.dano,crit,a.gwf),{tipo:a.tipo_dano})];
     if(ef.maldicion===obj)danos.push({expresion:"+2",dados:[],total:2,tipo:a.tipo_dano+" (Maldición)"});
     if(ef.maleficio===obj)danos.push(Object.assign(tirarExpr("1d6",crit,a.gwf),{tipo:"necrótico"}));
-    if(ef.abrasador&&a.clase==="arma")danos.push(Object.assign(tirarExpr("1d6",crit,a.gwf),{tipo:"fuego (Castigo abrasador)"}));
+    if(ef.abrasador&&a.clase==="arma")danos.push(Object.assign(tirarExpr(`${Number(ef.abrasador)||1}d6`,crit,a.gwf),{tipo:"fuego (Castigo abrasador)"}));
     const castigo=a.castigo&&$("castigoDano").checked&&!$("lblCastigoDano").hidden;
-    if(castigo)danos.push(Object.assign(tirarExpr("2d8",crit,a.gwf),{tipo:"radiante (Castigo divino)"}));
+    // Castigo divino: 2d8 con espacio de nivel 1, +1d8 por nivel, máximo 5d8.
+    if(castigo)danos.push(Object.assign(tirarExpr(`${Math.min(5,1+nivelDe($("espCastigo").value))}d8`,crit,a.gwf),{tipo:"radiante (Castigo divino)"}));
     const ts=Date.now();
     enCurso.dano={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"dano",ref:enCurso.tirada,accion:a.nombre,objetivo:obj,critico:crit,castigo,espacio_castigo:castigo?$("espCastigo").value:null,danos,ts}};
     guardarEnCurso();
