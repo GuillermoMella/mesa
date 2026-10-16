@@ -153,7 +153,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="sub" id="panelReaccion" hidden>
       <div class="eyebrow">Reacción disponible</div>
       <div id="motivoReaccion"></div>
-      <label for="armaReaccion">Ataque de oportunidad con<select id="armaReaccion"></select></label>
+      <label for="armaReaccion" id="lblArmaReaccion">Ataque de oportunidad con<select id="armaReaccion"></select></label>
       <button id="atacarReaccion">Atacar</button>
       <button class="sec" id="dejarReaccion">Dejarlo ir</button>
       <div class="estado" id="estadoReaccion"></div>
@@ -359,6 +359,13 @@ function campos(p,valor){
   if(!valor)return "";
   const s=combate.shalock, h=[];
   if(valor==="otra")return `<label>Qué hace<input data-k="${p}_texto" placeholder="Describe la acción"></label>`;
+  if(valor==="com:Preparar"){
+    h.push(`<div class="estado">Lo sueltas con tu reacción cuando se cumple el disparador, antes de tu siguiente turno.</div>`);
+    h.push(selector(`${p}_prep`,s.acciones.map(a=>({v:a.id,t:a.nombre})),"Qué preparas"));
+    h.push(selector(`${p}_disp`,[{v:"ver",t:"Cuando un enemigo entre en mi vista"},{v:"alcance",t:"Cuando un enemigo llegue a…"}],"Disparador"));
+    h.push(`<label>Pies (si eliges «llegue a…»)<input type="number" min="5" step="5" data-k="${p}_pies" value="5"></label>`);
+    return h.join("");
+  }
   if(valor.startsWith("com:"))return "";
   if(valor.startsWith("atq:")){
     const a=ataque(valor.slice(4));
@@ -426,6 +433,9 @@ function revisar(){
   const conc=[ad,ac].filter(o=>o&&o.concentracion);
   if(conc.length>1)avisos.push(`Solo una concentración: ${conc[1].nombre} termina ${conc[0].nombre}.`);
   if(conc.length&&s.concentracion)avisos.push(`Dejas de concentrarte en ${s.concentracion}.`);
+  if(form.accion==="com:Preparar"){const a=ataque(form.c.ac_prep||s.acciones[0].id);
+    if(a&&a.clase!=="arma"){const pierde=[s.concentracion,...conc.map(o=>o.nombre)].filter(Boolean);
+      avisos.push("Retener el conjuro exige concentración"+(pierde.length?`: termina ${pierde.join(" y ")}.`:"; si te dañan, salvación de concentración o se pierde."))}}
   if(ad&&ad.espacio&&ac&&ac.espacio)bloqueos.push("Si conjuras con la acción adicional, con la acción solo puedes lanzar un truco.");
   const gasto={};
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.espacio){const k=form.c[`${p}_espacio`];if(!k)bloqueos.push(`${o.nombre}: no te quedan espacios de nivel suficiente.`);else gasto[k]=(gasto[k]||0)+1}});
@@ -468,6 +478,10 @@ function tirarExpr(expr,critico,gwf){
 function describir(p,valor){
   if(!valor)return null;
   if(valor==="otra")return{tipo:"otra",texto:form.c[`${p}_texto`]||""};
+  if(valor==="com:Preparar"){
+    const a=ataque(form.c[`${p}_prep`]||combate.shalock.acciones[0].id), ver=(form.c[`${p}_disp`]||"ver")==="ver";
+    return{tipo:"preparar",nombre:"Preparar",ataque:a.id,accion:a.nombre,al_ver:ver,al_alcance:ver?null:Number(form.c[`${p}_pies`]||5),concentracion:a.clase!=="arma"};
+  }
   if(valor.startsWith("com:"))return{tipo:"comun",nombre:valor.slice(4)};
   if(valor.startsWith("atq:"))return{tipo:"ataque",id:valor.slice(4)};
   const o=opcion(valor.slice(3)), x={tipo:"opcion",id:o.id,nombre:o.nombre};
@@ -552,7 +566,8 @@ function pintarReaccion(){
   const rp=combate&&combate.reaccion_pendiente, p=$("panelReaccion");
   p.hidden=!rp||!!enCurso; if(p.hidden)return;
   $("motivoReaccion").textContent=rp.motivo;
-  const armas=combate.shalock.acciones.filter(a=>a.clase==="arma");
+  $("lblArmaReaccion").firstChild.textContent=rp.tipo==="preparada"?"Acción preparada: ":"Ataque de oportunidad con";
+  const armas=combate.shalock.acciones.filter(a=>rp.tipo==="preparada"?a.id===rp.ataque:a.clase==="arma");
   const prev=$("armaReaccion").value;
   $("armaReaccion").innerHTML=armas.map(a=>`<option value="${a.id}" ${a.id===prev?"selected":""}>${esc(a.nombre)}</option>`).join("");
 }
@@ -565,7 +580,7 @@ async function enviarReaccion(t){
 $("atacarReaccion").addEventListener("click",async()=>{
   const s=combate.shalock, rp=combate.reaccion_pendiente;
   const atq=tirarAtaque($("armaReaccion").value,rp.objetivo,null,{maldicion:s.efectos.maldicion,maleficio:s.efectos.maleficio,abrasador:false});
-  try{const id=await enviarReaccion({tipo:"reaccion",ataque:atq,ts:Date.now()});enCurso=Object.assign({tirada:id+".json"},atq);guardarEnCurso();$("panelReaccion").hidden=true;pintarDano()}
+  try{const id=await enviarReaccion({tipo:"reaccion",ataque:atq,preparada:rp.tipo==="preparada",ts:Date.now()});enCurso=Object.assign({tirada:id+".json"},atq);guardarEnCurso();$("panelReaccion").hidden=true;pintarDano()}
   catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}
 });
 $("dejarReaccion").addEventListener("click",async()=>{
@@ -579,7 +594,8 @@ function resumen(t){
   const parte=d=>{const m=/([+-]\d+)$/.exec(d.expresion);const mod=d.dados.length&&m?` ${m[1][0]} ${m[1].slice(1)}`:"";return d.dados.length?`${d.expresion}: ${d.dados.join(" + ")}${mod} = ${d.total} ${d.tipo}`:`${d.total} ${d.tipo}`};
   const txt=x=>!x?"":x.tipo==="ataque"?`${x.accion} → ${x.objetivo}: d20 ${x.d20.join(" / ")}${x.d20.length>1?` (se usa ${x.natural})`:""} ${x.bono>=0?"+":"−"} ${Math.abs(x.bono)}${x.bendicion?` + ${x.bendicion} (Bendición)`:""} = ${x.total}${x.critico?" · CRÍTICO":""}${x.danos?`. Daño si impacta: ${x.danos.map(parte).join("; ")}`:". El daño se tira si impacta."}`
     :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${parte(Object.assign({tipo:"PG"},x.curacion))}`:""}`
-    :x.tipo==="comun"?x.nombre:x.texto;
+    :x.tipo==="comun"?x.nombre
+    :x.tipo==="preparar"?`Preparar ${x.accion} (${x.al_ver?"cuando un enemigo entre en tu vista":`cuando un enemigo llegue a ${x.al_alcance} pies`})`:x.texto;
   if(t.adicional)out.push("Adicional: "+txt(t.adicional));
   if(t.accion)out.push("Acción: "+txt(t.accion)+(t.accion.tirada?` (${t.accion.habilidad}: ${t.accion.tirada.dados.join("")} ${t.accion.tirada.expresion.replace(/^1d20/,"")} = ${t.accion.tirada.total})`:""));
   if(t.movimientos&&t.movimientos.length)out.push("Movimiento: "+t.movimientos.map(m=>m.tipo==="levantarse"?"se levanta":`${m.pies} pies ${m.direccion} ${m.respecto}`).join(", "));
