@@ -404,7 +404,7 @@ const idxDe=tipo=>pasos.findIndex(x=>x.tipo===tipo);
 const ordenAdicional=()=>{const a=idxDe("adicional"),b=idxDe("accion");return a<0||b<0||a<b?"antes":"despues"};
 function momentoDe(id){const i=pasos.findIndex(x=>x.id===id),b=idxDe("accion");return b<0||i<b?"antes":"despues"}
 const yoPos=()=>{const y=combate.combatientes.find(c=>c.es_pj);return y&&y.pos};
-// Movimiento: la velocidad actual la calcula el motor (modificadores, cansancio, condiciones) y llega en
+// Movimiento: la velocidad actual la calcula el motor (base + modificadores de rasgos, efectos, cansancio y condiciones) y llega en
 // s.velocidad; aquí solo se recorre la lista: Correr suma esa velocidad en su paso, cada tramo resta su coste.
 const costeDe=x=>combate.mapa?(movMapa[x.id]?movMapa[x.id].coste:0):(x.pies||0);
 const levantaPlan=()=>$("levantar").checked&&!$("lblLevantar").hidden;
@@ -717,7 +717,7 @@ function revisar(){
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
   if(combate.turno!=="Shalock")bloqueos.push("Espera tu turno: puedes dejarlo armado.");
   const eco=s.economia||{}, vel=s.velocidad||0, usados=eco.movimiento||0, mov=movimientoElegido();
-  const traba=["agarrado","apresado","aturdido","inconsciente","paralizado","petrificado"].filter(x=>(s.condiciones||[]).includes(x));
+  const traba=s.fuentes_velocidad||[];
   $("velInfo").textContent=vel===0?`Tu velocidad actual es 0${traba.length?` (${traba.join(", ")})`:""}.`
     :`Velocidad actual ${vel} pies${eco.extra?` · +${eco.extra} por Correr`:""} · usados ${usados} · te quedan ${Math.max(0,presupuesto(null))} con lo armado`;
   // Recorre los pasos en orden: un tramo no puede usar pies que todavía no tienes (por ejemplo, antes de Correr).
