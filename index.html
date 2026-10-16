@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mesa de Shalock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Alegreya+Sans:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Una columna de mesa: lo que dice el DM, la tirada pedida, el envío. Tema oscuro deliberado. */
+:root{
+  --bg:#14110f; --panel:#1f1a17; --line:#3a302a; --fg:#e8dfd4; --muted:#a3968a;
+  --ember:#d9772b; --ok:#7fae6a; --bad:#cf5b4f;
+  --display:"Cinzel",Georgia,serif; --body:"Alegreya Sans",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+header{display:flex;justify-content:space-between;align-items:end;gap:12px}
+h1{font-family:var(--display);font-size:1.5rem;margin:0;letter-spacing:.04em}
+.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:10px}
+#mensaje{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.tirada{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.nombre{font-weight:700;font-size:1.1rem}
+.mod{font-family:var(--mono);color:var(--ember)}
+button{font:inherit;font-weight:700;background:var(--ember);color:var(--bg);border:0;border-radius:6px;padding:14px 18px;cursor:pointer;width:100%}
+button.sec{background:transparent;color:var(--muted);border:1px solid var(--line);padding:6px 10px;width:auto;font-weight:400;font-size:.85rem}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+label{display:grid;gap:4px;font-size:.9rem;color:var(--muted)}
+input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
+.resultado{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.dado{font-family:var(--mono);font-size:2.6rem;line-height:1}
+.total{font-family:var(--mono);font-size:1.2rem;color:var(--muted)}
+.estado{font-size:.9rem;color:var(--muted);overflow-wrap:anywhere}
+.estado.ok{color:var(--ok)} .estado.bad{color:var(--bad)}
+.pie{font-size:.8rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+@media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
+    <button class="sec" id="abrirAjustes">Conexión</button>
+  </header>
+
+  <section class="panel" id="ajustes" hidden>
+    <div class="eyebrow">Conexión con la mesa</div>
+    <label for="repo">Repositorio de datos<input id="repo" placeholder="usuario/mesa-datos" autocomplete="off"></label>
+    <label for="token">Token<input id="token" type="password" placeholder="github_pat_…" autocomplete="off"></label>
+    <button id="guardar">Guardar en este dispositivo</button>
+    <div class="estado">Se guarda solo en este navegador.</div>
+  </section>
+
+  <section class="panel" aria-live="polite">
+    <div class="eyebrow">Lo que dice el DM</div>
+    <p id="mensaje">Conectando…</p>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Tirada pedida</div>
+    <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
+    <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
+    <button id="tirar" disabled>Tirar y enviar al DM</button>
+    <div class="estado" id="estado"></div>
+  </section>
+
+  <div class="pie"><span id="conexion">Sin conectar</span><span id="hora"></span></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const API="https://api.github.com";
+let cfg={repo:"",token:""}, etag=null, pedido=null, pendiente=null, enviados=new Set(), sondeo=null;
+
+function leerCfg(){try{cfg=JSON.parse(localStorage.getItem("mesa_cfg")||"{}");}catch(e){cfg={}}cfg.repo=cfg.repo||"";cfg.token=cfg.token||""}
+function guardarCfg(){try{localStorage.setItem("mesa_cfg",JSON.stringify(cfg))}catch(e){}}
+try{enviados=new Set(JSON.parse(localStorage.getItem("mesa_enviados")||"[]"))}catch(e){}
+function marcarEnviado(id){enviados.add(id);try{localStorage.setItem("mesa_enviados",JSON.stringify([...enviados].slice(-50)))}catch(e){}}
+
+const fmtMod=m=>(m>=0?"+":"")+m;
+function d(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return 1+(a[0]%n)}
+function b64(s){const b=new TextEncoder().encode(s);let t="";for(const x of b)t+=String.fromCharCode(x);return btoa(t)}
+function deB64(s){const t=atob(s.replace(/\n/g,""));return new TextDecoder().decode(Uint8Array.from(t,c=>c.charCodeAt(0)))}
+function cabeceras(extra){return Object.assign({"Authorization":"Bearer "+cfg.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"},extra||{})}
+
+function pintar(e){
+  $("mensaje").textContent=e.mensaje||"Sin novedades.";
+  pedido=e.tirada||null;
+  if(pedido){
+    $("nombre").textContent=pedido.nombre||"Tirada";
+    $("mod").textContent=(pedido.expresion||"1d20")+" "+fmtMod(Number(pedido.mod)||0);
+    $("tirar").disabled=enviados.has(pedido.id);
+    if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
+  }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
+  if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
+}
+
+async function sondear(){
+  if(!cfg.repo||!cfg.token)return;
+  try{
+    const h=cabeceras(etag?{"If-None-Match":etag}:{});
+    const r=await fetch(`${API}/repos/${cfg.repo}/contents/estado.json`,{headers:h,cache:"no-store"});
+    if(r.status===304){$("conexion").textContent="Conectado";return}
+    if(r.status===401||r.status===403){$("conexion").textContent="El token no sirve o venció";return}
+    if(r.status===404){$("conexion").textContent="Conectado; el DM aún no publica la mesa";$("mensaje").textContent="Esperando al DM…";return}
+    if(!r.ok){$("conexion").textContent="Error "+r.status;return}
+    etag=r.headers.get("ETag");
+    const j=await r.json();
+    pintar(JSON.parse(deB64(j.content)));
+    $("conexion").textContent="Conectado";
+  }catch(e){$("conexion").textContent="Sin conexión"}
+}
+
+function arrancar(){
+  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;
+  if(!cfg.repo||!cfg.token){$("ajustes").hidden=false;$("mensaje").textContent="Falta la conexión: pon el repositorio y el token.";return}
+  if(sondeo)clearInterval(sondeo);etag=null;sondear();sondeo=setInterval(sondear,2000);
+}
+
+$("abrirAjustes").addEventListener("click",()=>{$("ajustes").hidden=!$("ajustes").hidden});
+$("guardar").addEventListener("click",()=>{cfg.repo=$("repo").value.trim();cfg.token=$("token").value.trim();guardarCfg();$("ajustes").hidden=true;arrancar()});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)sondear()});
+
+$("tirar").addEventListener("click",async()=>{
+  if(!pedido)return;
+  $("tirar").disabled=true;
+  // Si un envío falló, se reenvía la misma tirada: nunca se vuelve a tirar.
+  if(!pendiente||pendiente.tirada.pedido!==pedido.id){
+    const m=/^(\d*)d(\d+)$/i.exec(pedido.expresion||"1d20")||[0,"1","20"];
+    const n=Number(m[1]||1),caras=Number(m[2]),mod=Number(pedido.mod)||0;
+    const dados=Array.from({length:n},()=>d(caras)),ts=Date.now();
+    pendiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,tirada:{pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion||"1d20",dados,mod,total:dados.reduce((a,b)=>a+b,0)+mod,ts}};
+    const el=$("dado");el.classList.remove("rueda");void el.offsetWidth;el.classList.add("rueda");
+  }
+  const {id,tirada}=pendiente,{dados,mod,total}=tirada;
+  $("dado").textContent=dados.join(" · ");$("total").textContent="total "+total;$("resultado").hidden=false;
+  const est=$("estado");est.className="estado";est.textContent="Enviando…";
+  try{
+    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"tirada "+(pedido.nombre||""),content:b64(JSON.stringify(tirada))})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    marcarEnviado(pedido.id);pendiente=null;
+    est.className="estado ok";est.textContent=`Enviada: ${dados.join(", ")} ${fmtMod(mod)} → ${total}`;
+  }catch(e){
+    $("tirar").disabled=false;$("tirar").textContent="Reenviar la misma tirada";
+    est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Revisa la conexión y aprieta de nuevo, o escríbele el total al DM.`;
+  }
+});
+
+arrancar();
+</script>
+</body>
+</html>
