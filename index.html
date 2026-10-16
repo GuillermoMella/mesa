@@ -288,8 +288,10 @@ function tirarTurno(){
 
 function resumen(t){
   const out=[];
-  const txt=x=>!x?"":x.tipo==="ataque"?`${x.accion} → ${x.objetivo}: d20 ${x.d20.join("/")} ${x.bono>=0?"+":""}${x.bono}${x.bendicion?` +${x.bendicion}`:""} = ${x.total}${x.critico?" CRÍTICO":""}; daño ${x.danos.map(d=>d.total+" "+d.tipo).join(" + ")}`
-    :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${x.curacion.total}`:""}`
+  // Desglose completo: cada dado, el modificador y el total, para poder comprobarlo.
+  const parte=d=>{const m=/([+-]\d+)$/.exec(d.expresion);const mod=d.dados.length&&m?` ${m[1][0]} ${m[1].slice(1)}`:"";return d.dados.length?`${d.expresion}: ${d.dados.join(" + ")}${mod} = ${d.total} ${d.tipo}`:`${d.total} ${d.tipo}`};
+  const txt=x=>!x?"":x.tipo==="ataque"?`${x.accion} → ${x.objetivo}: d20 ${x.d20.join(" / ")}${x.d20.length>1?` (se usa ${x.natural})`:""} ${x.bono>=0?"+":"−"} ${Math.abs(x.bono)}${x.bendicion?` + ${x.bendicion} (Bendición)`:""} = ${x.total}${x.critico?" · CRÍTICO":""}. Daño si impacta: ${x.danos.map(parte).join("; ")}`
+    :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${parte(Object.assign({tipo:"PG"},x.curacion))}`:""}`
     :x.tipo==="comun"?x.nombre:x.texto;
   if(t.adicional)out.push("Adicional: "+txt(t.adicional));
   if(t.accion)out.push("Acción: "+txt(t.accion));
@@ -352,7 +354,7 @@ $("tirar").addEventListener("click",async()=>{
     const el=$("dado");el.classList.remove("rueda");void el.offsetWidth;el.classList.add("rueda");
   }
   const {id,tirada}=pendiente,{dados,mod,total}=tirada;
-  $("dado").textContent=dados.join(" · ");$("total").textContent="total "+total;$("resultado").hidden=false;
+  $("dado").textContent=dados.join(" · ");$("total").textContent=`${mod>=0?"+":"−"} ${Math.abs(mod)} = ${total}`;$("resultado").hidden=false;
   const est=$("estado");est.className="estado";est.textContent="Enviando…";
   try{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"tirada "+(pedido.nombre||""),content:b64(JSON.stringify(tirada))})});
