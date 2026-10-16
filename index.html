@@ -246,9 +246,11 @@ function alcanzablesHex(f,ini,max,hostiles,aliados){
 function caminoHex(prev,ini,dest){const r=[dest];let a=dest;while(k(a)!==k(ini)){a=prev[k(a)];r.push(a)}return r.reverse()}
 function deCubo(q,r,s){let rq=Math.round(q),rr=Math.round(r),rs=Math.round(s);const dq=Math.abs(rq-q),dr=Math.abs(rr-r),ds=Math.abs(rs-s);
   if(dq>dr&&dq>ds)rq=-rr-rs;else if(dr>ds)rr=-rq-rs;return[rq+(rr-(rr&1))/2,rr]}
-function coberturaHex(f,a,b){const n=distHex(a,b),A=aCubo(a),B=aCubo(b),cs=[];
-  for(let i=1;i<n;i++){const t=i/n;cs.push(celdaHex(f,deCubo(A[0]+(B[0]-A[0])*t+1e-6,A[1]+(B[1]-A[1])*t+2e-6,A[2]+(B[2]-A[2])*t-3e-6)))}
-  return cs.includes("#")?null:cs.includes("O")?5:cs.includes("o")?2:0}
+// Una criatura en medio (ocupadas) da cobertura media, como en el PHB.
+function coberturaHex(f,a,b,ocupadas=[]){const n=distHex(a,b),A=aCubo(a),B=aCubo(b),cs=[],hs=[];
+  for(let i=1;i<n;i++){const t=i/n,h=deCubo(A[0]+(B[0]-A[0])*t+1e-6,A[1]+(B[1]-A[1])*t+2e-6,A[2]+(B[2]-A[2])*t-3e-6);hs.push(k(h));cs.push(celdaHex(f,h))}
+  const tapa=ocupadas.some(o=>hs.includes(k(o)));
+  return cs.includes("#")?null:cs.includes("O")?5:(cs.includes("o")||tapa)?2:0}
 let movMapa=null; // {destino, coste, ruta}
 const yoPos=()=>{const y=combate.combatientes.find(c=>c.es_pj);return y&&y.pos};
 function quedanPies(){const s=combate.shalock,eco=s.economia||{},vel=s.velocidad||30;
@@ -446,7 +448,7 @@ function revisar(){
     else if(a.clase!=="arma"&&a.alcance&&dd>a.alcance)bloqueos.push(`${obj} está a ${dd} pies, fuera del alcance de ${a.alcance}.`);
     if(a.clase!=="arma"&&enemigoJunto())avisos.push("Atacas a distancia con un enemigo junto a ti: el ataque va con desventaja.");
     if(combate.mapa){const c=combate.combatientes.find(x=>x.id===obj),o=origenAtaque();
-      if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos);
+      if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==c.id).map(x=>x.pos));
         if(cob===null)bloqueos.push(`No ves a ${obj}: hay un muro en medio.`);else if(cob)avisos.push(`${obj} tiene cobertura (+${cob} a su CA).`)}}
   }
   if(!form.accion&&!form.adicional&&!mov.mv.length)bloqueos.push("Elige al menos una acción o un movimiento.");
