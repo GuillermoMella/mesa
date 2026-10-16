@@ -264,6 +264,7 @@ function pintarCombate(cb){
   const previoRef=$("movRef").value||form.c.ac_objetivo;
   $("movRef").innerHTML=cb.combatientes.filter(c=>c.activo&&c.id!=="Shalock").map(c=>`<option ${c.id===previoRef?"selected":""}>${esc(c.id)}</option>`).join("");
   $("lblLevantar").hidden=!(s.condiciones||[]).includes("derribado");
+  if(!form.acManual&&form.c.ad_objetivo&&enemigos().includes(form.c.ad_objetivo))form.c.ac_objetivo=form.c.ad_objetivo;
   restaurar(); revisar(); pintarDano(); pintarReaccion();
 }
 
@@ -307,7 +308,10 @@ function campos(p,valor){
   return h.join("");
 }
 function restaurar(){document.querySelectorAll("[data-k]").forEach(el=>{const v=form.c[el.dataset.k];if(v===undefined)return;if(el.type==="checkbox")el.checked=v;else el.value=v});document.querySelectorAll("[data-k]").forEach(el=>{if(el.type!=="checkbox"&&form.c[el.dataset.k]===undefined)form.c[el.dataset.k]=el.value})}
-document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
+document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;
+  // La acción apunta por defecto al blanco de la acción adicional, salvo que el jugador lo cambie.
+  if(k==="ac_objetivo")form.acManual=true;
+  if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
 $("selAccion").onchange=ev=>{form.accion=ev.target.value;pintarCombate(combate)};
 document.querySelectorAll("input[name=ordenAd]").forEach(x=>x.onchange=()=>{form.orden=x.value});
@@ -504,7 +508,7 @@ $("enviarTurno").addEventListener("click",async()=>{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioTurno.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de Shalock",content:b64(JSON.stringify(t))})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
-    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{}});$("notas").value="";$("movPies").value=0;$("levantar").checked=false;
+    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false});$("notas").value="";$("movPies").value=0;$("levantar").checked=false;
     $("enviarTurno").textContent="Tirar y enviar turno";$("movMomento").value="antes";
     est.className="estado ok";est.textContent="Turno enviado al DM.";
     pintarCombate(combate);
