@@ -342,7 +342,7 @@ function tirarTurno(){
   const s=combate.shalock, ad=describir("ad",form.adicional), ac=describir("ac",form.accion);
   // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
   let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
-  if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
+  if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio"||ad.id==="mover_maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
   if(ac&&ac.tipo==="ataque")Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,form.c.ac_ventaja?"ventaja":form.c.ac_desventaja?"desventaja":null,{maldicion,maleficio,abrasador}));
   if(ac&&ac.id==="curar")ac.curacion=tirarExpr(`${ac.nivel||1}d8+4`,false,false);
   return{tipo:"turno",adicional:ad,accion:ac,orden:form.orden,notas:form.notas,ts:Date.now()};
