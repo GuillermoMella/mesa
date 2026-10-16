@@ -38,6 +38,31 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
 .estado{font-size:.9rem;color:var(--muted);overflow-wrap:anywhere}
 .estado.ok{color:var(--ok)} .estado.bad{color:var(--bad)}
 .pie{font-size:.8rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.turno{font-family:var(--display);font-size:1.05rem}
+.lista{display:grid;gap:8px}
+.c{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:4px}
+.c.actual{border-color:var(--ember)}
+.c.fuera{opacity:.45}
+.c-cab{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.c-nombre{font-weight:700}
+.c-dato{font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+.c-desc{font-size:.9rem;color:var(--muted)}
+.barra{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.barra>i{display:block;height:100%;background:var(--ok)}
+.barra.media>i{background:var(--ember)} .barra.baja>i{background:var(--bad)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.chip.on{border-color:var(--ember);color:var(--ember)}
+.recursos{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px}
+.rec{border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.rec b{font-family:var(--mono);font-size:1.1rem;display:block}
+.acciones{display:grid;gap:8px}
+.acc{background:transparent;color:var(--fg);border:1px solid var(--line);text-align:left;font-weight:400;padding:10px 12px}
+.acc.sel{border-color:var(--ember);background:#2a211b}
+.acc small{display:block;font-family:var(--mono);color:var(--muted)}
+select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
+.opciones{display:flex;gap:14px;flex-wrap:wrap;font-size:.95rem}
+.opciones label{display:flex;gap:6px;align-items:center;color:var(--fg)}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
 </style>
 </head>
@@ -69,6 +94,29 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
     <div class="estado" id="estado"></div>
   </section>
 
+  <section class="panel" id="panelCombate" hidden>
+    <div class="eyebrow">Combate</div>
+    <div class="turno" id="turno"></div>
+    <div class="lista" id="combatientes"></div>
+  </section>
+
+  <section class="panel" id="panelShalock" hidden>
+    <div class="eyebrow">Shalock</div>
+    <div class="recursos" id="recursos"></div>
+    <div class="chips" id="efectos"></div>
+    <div class="eyebrow">Atacar</div>
+    <div class="acciones" id="acciones"></div>
+    <label for="objetivo">Blanco<select id="objetivo"></select></label>
+    <div class="opciones">
+      <label><input type="checkbox" id="ventaja"> Ventaja</label>
+      <label><input type="checkbox" id="desventaja"> Desventaja</label>
+      <label id="lblCastigo"><input type="checkbox" id="castigo"> Castigo divino (2d8)</label>
+    </div>
+    <div class="resultado" id="resAtaque" hidden><span class="dado" id="dadoAtaque">–</span><span class="total" id="totalAtaque"></span></div>
+    <button id="atacar" disabled>Tirar ataque y enviar</button>
+    <div class="estado" id="estadoAtaque"></div>
+  </section>
+
   <div class="pie"><span id="conexion">Sin conectar</span><span id="hora"></span></div>
 </div>
 
@@ -98,7 +146,82 @@ function pintar(e){
     if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
+  pintarCombate(e.combate||null);
 }
+
+// ---- Combate ----
+let combate=null, accionSel=null, envioAtaque=null;
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function barra(pg,max){const r=max?pg/max:0;return `<div class="barra ${r<=.25?"baja":r<=.5?"media":""}"><i style="width:${Math.max(0,Math.min(100,r*100))}%"></i></div>`}
+function pintarCombate(cb){
+  combate=cb;
+  $("panelCombate").hidden=!cb; $("panelShalock").hidden=!(cb&&cb.shalock);
+  if(!cb)return;
+  $("turno").textContent=`Ronda ${cb.ronda}`+(cb.turno?` · turno de ${cb.turno}`:"");
+  $("combatientes").innerHTML=cb.combatientes.map(c=>{
+    const vida=c.pg!=null?`<span class="c-dato">PG ${c.pg}/${c.pg_max}${c.pg_temporales?` +${c.pg_temporales}`:""}${c.ca!=null?` · CA ${c.ca}`:""}</span>`:`<span class="c-dato">${esc(c.estado)}</span>`;
+    const chips=[...c.condiciones.map(x=>`<span class="chip">${esc(x)}</span>`),c.concentracion?`<span class="chip on">concentrado: ${esc(c.concentracion)}</span>`:""].join("");
+    return `<div class="c ${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"}"><div class="c-cab"><span class="c-nombre">${esc(c.id)}</span>${vida}</div>${c.pg!=null?barra(c.pg,c.pg_max):""}${c.descripcion?`<div class="c-desc">${esc(c.descripcion)}</div>`:""}${chips?`<div class="chips">${chips}</div>`:""}</div>`}).join("");
+  const s=cb.shalock; if(!s)return;
+  const r=s.recursos;
+  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],["Espacios paladín",r.espacios_paladin],["Espacio de pacto",r.espacios_pacto],["Maldición",r.maldicion],["Imposición",r.imposicion]]
+    .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${esc(v??"–")}</b></div>`).join("");
+  const ef=s.efectos;
+  $("efectos").innerHTML=[ef.bendecido?"Bendecido (+1d4)":"",ef.maldicion?`Maldición: ${ef.maldicion}`:"",ef.maleficio?`Maleficio: ${ef.maleficio}`:""].filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
+  $("acciones").innerHTML=s.acciones.map(a=>`<button class="acc ${accionSel===a.id?"sel":""}" data-id="${a.id}">${esc(a.nombre)}<small>${a.bono>=0?"+":""}${a.bono} · ${esc(a.dano)} ${esc(a.tipo_dano)}${a.alcance?` · ${a.alcance} pies`:""}</small></button>`).join("");
+  document.querySelectorAll(".acc").forEach(b=>b.onclick=()=>{accionSel=b.dataset.id;pintarCombate(combate)});
+  const previo=$("objetivo").value;
+  $("objetivo").innerHTML=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo).map(c=>`<option ${c.id===previo?"selected":""}>${esc(c.id)}</option>`).join("");
+  const acc=s.acciones.find(a=>a.id===accionSel);
+  $("lblCastigo").hidden=!(acc&&acc.castigo&&(r.espacios_paladin>0||r.espacios_pacto>0));
+  $("atacar").disabled=!acc||!$("objetivo").value||!!envioAtaque;
+}
+
+function tirarExpr(expr,critico,gwf){
+  const m=/^(\d+)d(\d+)([+-]\d+)?$/.exec(expr); if(!m)return{expresion:expr,dados:[],total:Number(expr)||0};
+  const n=Number(m[1])*(critico?2:1),caras=Number(m[2]),bono=Number(m[3]||0);
+  // Combate con armas a dos manos: repite una vez cada 1 o 2.
+  const dados=Array.from({length:n},()=>{let x=d(caras);if(gwf&&x<=2)x=d(caras);return x});
+  return{expresion:`${n}d${caras}${bono?(bono>0?"+":"")+bono:""}`,dados,total:dados.reduce((a,b)=>a+b,0)+bono};
+}
+
+$("ventaja").onchange=()=>{if($("ventaja").checked)$("desventaja").checked=false};
+$("desventaja").onchange=()=>{if($("desventaja").checked)$("ventaja").checked=false};
+$("objetivo").onchange=()=>pintarCombate(combate);
+
+$("atacar").addEventListener("click",async()=>{
+  const s=combate&&combate.shalock, acc=s&&s.acciones.find(a=>a.id===accionSel), obj=$("objetivo").value;
+  if(!acc||!obj)return;
+  if(!envioAtaque){
+    const modo=$("ventaja").checked?"ventaja":$("desventaja").checked?"desventaja":null;
+    const d20=modo?[d(20),d(20)]:[d(20)], natural=modo==="ventaja"?Math.max(...d20):modo==="desventaja"?Math.min(...d20):d20[0];
+    const bend=s.efectos.bendecido?d(4):0;
+    const critico=natural>=(s.efectos.maldicion===obj?19:20);
+    const danos=[Object.assign(tirarExpr(acc.dano,critico,acc.gwf),{tipo:acc.tipo_dano})];
+    if(s.efectos.maldicion===obj)danos.push({expresion:"+2",dados:[],total:2,tipo:acc.tipo_dano+" (Maldición)"});
+    if(s.efectos.maleficio===obj)danos.push(Object.assign(tirarExpr("1d6",critico,acc.gwf),{tipo:"necrótico"}));
+    const castigo=acc.castigo&&$("castigo").checked;
+    if(castigo)danos.push(Object.assign(tirarExpr("2d8",critico,acc.gwf),{tipo:"radiante"}));
+    const ts=Date.now();
+    envioAtaque={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"ataque",accion:acc.nombre,clase:acc.clase,objetivo:obj,d20,natural,bono:acc.bono,bendicion:bend,total:natural+acc.bono+bend,critico,castigo,modo,danos,ts}};
+    const el=$("dadoAtaque");el.classList.remove("rueda");void el.offsetWidth;el.classList.add("rueda");
+  }
+  const t=envioAtaque.t;
+  $("dadoAtaque").textContent=t.d20.join(" · ");
+  $("totalAtaque").textContent=`ataque ${t.total}${t.critico?" · CRÍTICO":""} · daño ${t.danos.map(x=>x.total+" "+x.tipo).join(" + ")}`;
+  $("resAtaque").hidden=false;
+  const est=$("estadoAtaque");est.className="estado";est.textContent="Enviando…";$("atacar").disabled=true;
+  try{
+    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioAtaque.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"ataque "+t.accion,content:b64(JSON.stringify(t))})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    envioAtaque=null;$("atacar").textContent="Tirar ataque y enviar";$("castigo").checked=false;
+    est.className="estado ok";est.textContent="Enviado al DM.";
+  }catch(e){
+    $("atacar").textContent="Reenviar el mismo ataque";$("atacar").disabled=false;
+    est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo resultado.`;
+  }
+  pintarCombate(combate);
+});
 
 async function sondear(){
   if(!cfg.repo||!cfg.token)return;
