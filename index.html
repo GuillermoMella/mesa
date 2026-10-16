@@ -46,6 +46,20 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
 .ap{font-size:.8rem;border-radius:999px;padding:1px 10px;border:1px solid currentColor}
 .ap.ileso{color:var(--ok)} .ap.herido{color:var(--ember)} .ap.muy{color:var(--bad)} .ap.caido{color:var(--muted)}
 .pips{letter-spacing:2px;color:var(--ember);font-size:1.05rem}
+/* Toques cómodos en el celular: 44 px mínimo y texto de 16 px (sin zoom automático). */
+button,select,input{min-height:44px;font-size:16px}
+input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accent-color:var(--ember)}
+.opciones label{min-height:40px}
+.acc,button.sec{min-height:44px}
+/* Orden de iniciativa compacto, desplazable de lado. */
+.orden{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.orden span{flex:0 0 auto;font-size:.85rem;border:1px solid var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.orden span.actual{background:var(--ember);color:var(--bg);border-color:var(--ember);font-weight:700}
+.orden span.fuera{opacity:.4;text-decoration:line-through}
+.orden span.enemigo{border-style:dashed}
+.economia{display:flex;gap:6px;flex-wrap:wrap}
+.economia span{font-size:.85rem;border-radius:6px;padding:4px 10px;border:1px solid var(--ok);color:var(--ok)}
+.economia span.usada{border-color:var(--line);color:var(--muted);text-decoration:line-through}
 .pips .vacio{color:var(--line)}
 
 .lista{display:grid;gap:8px}
@@ -108,12 +122,14 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section class="panel" id="panelCombate" hidden>
     <div class="eyebrow">Combate</div>
     <div class="turno" id="turno"></div>
+    <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
     <div class="lista" id="combatientes"></div>
   </section>
 
   <section class="panel" id="panelShalock" hidden>
     <div class="eyebrow">Shalock</div>
     <div class="recursos" id="recursos"></div>
+    <div class="economia" id="economia"></div>
     <div class="chips" id="efectos"></div>
     <div class="sub" id="panelReaccion" hidden>
       <div class="eyebrow">Reacción disponible</div>
@@ -202,6 +218,9 @@ function pintarCombate(cb){
     const vida=c.pg!=null?`<span class="c-dato">PG ${c.pg}/${c.pg_max}${c.pg_temporales?` +${c.pg_temporales}`:""}${c.ca!=null?` · CA ${c.ca}`:""}</span>`:`<span class="ap ${cls}">${esc(c.estado)}</span>`;
     const chips=[...c.condiciones.map(x=>`<span class="chip">${esc(x)}</span>`),c.concentracion?`<span class="chip on">concentrado: ${esc(c.concentracion)}</span>`:""].join("");
     return `<div class="c ${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"}"><div class="c-cab"><span class="c-nombre">${esc(c.id)}</span>${vida}</div>${c.pg!=null?barra(c.pg,c.pg_max):""}${c.descripcion?`<div class="c-desc">${esc(c.descripcion)}</div>`:""}${chips?`<div class="chips">${chips}</div>`:""}</div>`};
+  $("orden").innerHTML=cb.combatientes.filter(c=>c.iniciativa!=null).map(c=>`<span class="${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"} ${c.bando==="enemigo"?"enemigo":""}">${esc(c.id)}</span>`).join("");
+  // Centra el turno actual en la franja sin mover la página.
+  const actual=document.querySelector("#orden .actual"); if(actual)$("orden").scrollLeft=actual.offsetLeft-$("orden").offsetLeft-$("orden").clientWidth/2+actual.offsetWidth/2;
   const cuad=cb.combatientes.filter(c=>c.bando==="cuadrilla"), ene=cb.combatientes.filter(c=>c.bando==="enemigo");
   $("combatientes").innerHTML=`<div class="grupo"><div class="eyebrow">Enemigos</div>${ene.map(tarjeta).join("")}</div><div class="grupo"><div class="eyebrow">Cuadrilla</div>${cuad.map(tarjeta).join("")}</div>`;
   // En combate, lo del combate va arriba y la tirada pedida solo si hay una.
@@ -210,15 +229,19 @@ function pintarCombate(cb){
   const s=cb.shalock; if(!s)return;
   const r=s.recursos;
   const pips=(n,max)=>n==null?"–":`<span class="pips">${"●".repeat(Math.max(0,n))}<span class="vacio">${"○".repeat(Math.max(0,(max||n)-n))}</span></span>`;
-  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],...Object.entries(r.espacios||{}).map(([n,e])=>[`Espacios nivel ${n}`,pips(e.restantes,e.max)]),[`Pacto (nivel ${r.pacto?r.pacto.nivel:"–"})`,r.pacto?pips(r.pacto.restantes,r.pacto.max):"–"],["Maldición",pips(r.maldicion,1)],["Imposición",r.imposicion??"–"],["Reacción",s.reaccion_usada?"usada":"disponible"]]
+  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],...Object.entries(r.espacios||{}).map(([n,e])=>[`Espacios nivel ${n}`,pips(e.restantes,e.max)]),[`Pacto (nivel ${r.pacto?r.pacto.nivel:"–"})`,r.pacto?pips(r.pacto.restantes,r.pacto.max):"–"],["Maldición",pips(r.maldicion,1)],["Imposición",r.imposicion??"–"]]
     .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${v}</b></div>`).join("");
+  const eco=s.economia||{}, tuyo2=cb.turno==="Shalock";
+  $("economia").innerHTML=[["Acción",eco.accion&&tuyo2],["Acción adicional",eco.adicional&&tuyo2],["Reacción",s.reaccion_usada]].map(([k,u])=>`<span class="${u?"usada":""}">${k}: ${u?"usada":"disponible"}</span>`).join("");
   const ef=s.efectos;
   $("efectos").innerHTML=[s.concentracion?`Concentrado: ${s.concentracion}`:"",ef.bendecido?"Bendecido (+1d4)":"",ef.maldicion?`Maldición: ${ef.maldicion}`:"",ef.maleficio?`Maleficio: ${ef.maleficio}`:""].filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
   // Menús (se reconstruyen conservando lo elegido).
   const ad=[`<option value="">Ninguna</option>`,...s.opciones.filter(o=>o.tiempo==="adicional").map(o=>`<option value="op:${o.id}">${esc(o.nombre)}</option>`),`<option value="otra">Otra (escribirla)</option>`];
   $("selAdicional").innerHTML=ad.join(""); $("selAdicional").value=form.adicional;
+  $("selAdicional").disabled=!!(eco.adicional&&tuyo2); if($("selAdicional").disabled){form.adicional="";$("selAdicional").value=""}
   const ac=[`<option value="">Elegir…</option>`,...s.acciones.map(a=>`<option value="atq:${a.id}">Atacar: ${esc(a.nombre)}</option>`),...s.opciones.filter(o=>o.tiempo==="accion").map(o=>`<option value="op:${o.id}">${esc(o.nombre)}</option>`),...s.comunes.map(x=>`<option value="com:${esc(x)}">${esc(x)}</option>`),`<option value="otra">Otra (escribirla)</option>`];
   $("selAccion").innerHTML=ac.join(""); $("selAccion").value=form.accion;
+  $("selAccion").disabled=!!(eco.accion&&tuyo2); if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
   $("cfgAdicional").innerHTML=campos("ad",form.adicional); $("cfgAccion").innerHTML=campos("ac",form.accion);
   restaurar(); revisar(); pintarDano(); pintarReaccion();
 }
@@ -283,6 +306,7 @@ function revisar(){
   if(ad&&ad.id==="maldicion"&&!s.recursos.maldicion)bloqueos.push("La Maldición ya se usó; vuelve con un descanso.");
   if(ac&&ac.id==="imposicion"&&!(Number(form.c.ac_puntos)>0&&Number(form.c.ac_puntos)<=s.recursos.imposicion))bloqueos.push("Indica cuántos puntos de la reserva usas.");
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
+  if(combate.turno!=="Shalock")bloqueos.push("Espera tu turno: puedes dejarlo armado.");
   if(!form.accion&&!form.adicional)bloqueos.push("Elige al menos una acción.");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
