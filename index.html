@@ -39,6 +39,15 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
 .estado.ok{color:var(--ok)} .estado.bad{color:var(--bad)}
 .pie{font-size:.8rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .turno{font-family:var(--display);font-size:1.05rem}
+.banner{font-family:var(--display);font-size:1.2rem;text-align:center;padding:10px;border-radius:6px;border:1px solid var(--line)}
+.banner.tuyo{background:var(--ember);color:var(--bg);border-color:var(--ember)}
+.grupo{display:grid;gap:8px}
+.grupo>.eyebrow{margin-top:4px}
+.ap{font-size:.8rem;border-radius:999px;padding:1px 10px;border:1px solid currentColor}
+.ap.ileso{color:var(--ok)} .ap.herido{color:var(--ember)} .ap.muy{color:var(--bad)} .ap.caido{color:var(--muted)}
+.pips{letter-spacing:2px;color:var(--ember);font-size:1.05rem}
+.pips .vacio{color:var(--line)}
+
 .lista{display:grid;gap:8px}
 .c{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:4px}
 .c.actual{border-color:var(--ember)}
@@ -88,7 +97,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <p id="mensaje">Conectando…</p>
   </section>
 
-  <section class="panel">
+  <section class="panel" id="panelPedido">
     <div class="eyebrow">Tirada pedida</div>
     <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
@@ -168,6 +177,7 @@ function pintar(e){
     if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
+  $("panelPedido").hidden=!pedido&&!!e.combate;
   pintarCombate(e.combate||null);
 }
 
@@ -185,15 +195,23 @@ function pintarCombate(cb){
   combate=cb;
   $("panelCombate").hidden=!cb; $("panelShalock").hidden=!(cb&&cb.shalock);
   if(!cb)return;
-  $("turno").textContent=`Ronda ${cb.ronda}`+(cb.turno?` · turno de ${cb.turno}`:"");
-  $("combatientes").innerHTML=cb.combatientes.map(c=>{
-    const vida=c.pg!=null?`<span class="c-dato">PG ${c.pg}/${c.pg_max}${c.pg_temporales?` +${c.pg_temporales}`:""}${c.ca!=null?` · CA ${c.ca}`:""}</span>`:`<span class="c-dato">${esc(c.estado)}</span>`;
+  const tuyo=cb.turno==="Shalock";
+  $("turno").innerHTML=`<div class="banner ${tuyo?"tuyo":""}">${tuyo?"Es tu turno":cb.turno?"Turno de "+esc(cb.turno):"Preparando el combate"}</div><div class="c-dato" style="text-align:center">Ronda ${cb.ronda}</div>`;
+  const tarjeta=c=>{
+    const cls={ileso:"ileso",herido:"herido","muy herido":"muy","caído":"caido"}[c.estado]||"";
+    const vida=c.pg!=null?`<span class="c-dato">PG ${c.pg}/${c.pg_max}${c.pg_temporales?` +${c.pg_temporales}`:""}${c.ca!=null?` · CA ${c.ca}`:""}</span>`:`<span class="ap ${cls}">${esc(c.estado)}</span>`;
     const chips=[...c.condiciones.map(x=>`<span class="chip">${esc(x)}</span>`),c.concentracion?`<span class="chip on">concentrado: ${esc(c.concentracion)}</span>`:""].join("");
-    return `<div class="c ${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"}"><div class="c-cab"><span class="c-nombre">${esc(c.id)}</span>${vida}</div>${c.pg!=null?barra(c.pg,c.pg_max):""}${c.descripcion?`<div class="c-desc">${esc(c.descripcion)}</div>`:""}${chips?`<div class="chips">${chips}</div>`:""}</div>`}).join("");
+    return `<div class="c ${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"}"><div class="c-cab"><span class="c-nombre">${esc(c.id)}</span>${vida}</div>${c.pg!=null?barra(c.pg,c.pg_max):""}${c.descripcion?`<div class="c-desc">${esc(c.descripcion)}</div>`:""}${chips?`<div class="chips">${chips}</div>`:""}</div>`};
+  const cuad=cb.combatientes.filter(c=>c.bando==="cuadrilla"), ene=cb.combatientes.filter(c=>c.bando==="enemigo");
+  $("combatientes").innerHTML=`<div class="grupo"><div class="eyebrow">Enemigos</div>${ene.map(tarjeta).join("")}</div><div class="grupo"><div class="eyebrow">Cuadrilla</div>${cuad.map(tarjeta).join("")}</div>`;
+  // En combate, lo del combate va arriba y la tirada pedida solo si hay una.
+  const wrap=document.querySelector(".wrap"), head=wrap.querySelector("header");
+  head.after($("panelCombate")); $("panelCombate").after($("panelShalock"));
   const s=cb.shalock; if(!s)return;
   const r=s.recursos;
-  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],["Espacios paladín",r.espacios_paladin],["Espacio de pacto",r.espacios_pacto],["Maldición",r.maldicion],["Imposición",r.imposicion]]
-    .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${esc(v??"–")}</b></div>`).join("");
+  const pips=(n,max)=>n==null?"–":`<span class="pips">${"●".repeat(Math.max(0,n))}<span class="vacio">${"○".repeat(Math.max(0,(max||n)-n))}</span></span>`;
+  $("recursos").innerHTML=[["PG",`${s.pg}/${s.pg_max}`+(s.pg_temporales?` +${s.pg_temporales}`:"")],["CA",s.ca],["Espacios paladín",pips(r.espacios_paladin,2)],["Pacto",pips(r.espacios_pacto,1)],["Maldición",pips(r.maldicion,1)],["Imposición",r.imposicion??"–"],["Reacción",s.reaccion_usada?"usada":"disponible"]]
+    .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${v}</b></div>`).join("");
   const ef=s.efectos;
   $("efectos").innerHTML=[s.concentracion?`Concentrado: ${s.concentracion}`:"",ef.bendecido?"Bendecido (+1d4)":"",ef.maldicion?`Maldición: ${ef.maldicion}`:"",ef.maleficio?`Maleficio: ${ef.maleficio}`:""].filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
   // Menús (se reconstruyen conservando lo elegido).
