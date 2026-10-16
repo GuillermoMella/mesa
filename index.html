@@ -59,8 +59,12 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 .orden span.fuera{opacity:.4;text-decoration:line-through}
 .orden span.enemigo{border-style:dashed}
 .economia{display:flex;gap:6px;flex-wrap:wrap}
-#mapa{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
-#mapa svg{display:block;min-width:100%;height:auto}
+#mapa{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:6px;background:var(--bg);touch-action:pan-x pan-y;cursor:grab;-webkit-overflow-scrolling:touch}
+#panelMapa{min-width:0;max-width:100%}
+#mapa{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+#mapa svg{display:block;max-width:none}
+.zoom{display:flex;gap:6px;margin:0 0 6px}
+.zoom button{width:auto;flex:0 0 auto;min-width:44px;min-height:40px;padding:6px 12px}
 .hx{stroke:var(--line);stroke-width:1}
 .hx.alcanza{stroke:var(--ok);stroke-width:2;cursor:pointer}
 .hx.ruta{stroke:var(--ember);stroke-width:2.5}
@@ -140,7 +144,10 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="eyebrow">Combate</div>
     <div class="turno" id="turno"></div>
     <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
-    <div id="panelMapa" hidden><div id="mapa"></div><div class="estado" id="infoMapa"></div></div>
+    <div id="panelMapa" hidden>
+      <div class="zoom"><button class="sec" id="zoomMenos" aria-label="Alejar">−</button><button class="sec" id="zoomMas" aria-label="Acercar">+</button><button class="sec" id="centrarMapa">Centrar en mí</button></div>
+      <div id="mapa"></div><div class="estado" id="infoMapa"></div>
+    </div>
     <div class="lista" id="combatientes"></div>
     <details id="panelRegistro"><summary class="eyebrow">Lo que pasó</summary><ol class="registro" id="registro"></ol></details>
   </section>
@@ -260,6 +267,38 @@ function quedanPies(excluir){const s=combate.shalock,eco=s.economia||{},vel=s.ve
   if((s.condiciones||[]).includes("agarrado"))return 0;
   const correr=eco.correr||form.accion==="com:Correr",lev=$("levantar").checked&&!$("lblLevantar").hidden?Math.floor(vel/2):0;
   return vel*(correr?2:1)-(eco.movimiento||0)-lev-costeTramos(excluir)}
+// Zoom (botones o pellizco), deslizar (dedo o arrastre con el mouse) y centrar en tu ficha.
+let zoomMapa=1,geoMapa=null,mapaCentrado=false,turnoPrevio=null;
+try{zoomMapa=Number(localStorage.getItem("mesa_zoom"))||1}catch(e){}
+function fijarZoom(z){
+  const el=$("mapa"),svg=el.querySelector("svg");z=Math.max(0.5,Math.min(3,z));
+  if(!svg||!geoMapa){zoomMapa=z;return}
+  // Conserva el punto que está en el centro de la vista.
+  const cx=(el.scrollLeft+el.clientWidth/2)/zoomMapa,cy=(el.scrollTop+el.clientHeight/2)/zoomMapa;
+  zoomMapa=z;svg.setAttribute("width",(geoMapa.w*z).toFixed(0));svg.setAttribute("height",(geoMapa.h*z).toFixed(0));
+  el.scrollLeft=cx*z-el.clientWidth/2;el.scrollTop=cy*z-el.clientHeight/2;
+  try{localStorage.setItem("mesa_zoom",String(z))}catch(e){}
+}
+function centrarMapa(){
+  const el=$("mapa"),yo=yoPos();if(!geoMapa||!yo)return;
+  el.scrollLeft=geoMapa.cx(yo)*zoomMapa-el.clientWidth/2;el.scrollTop=geoMapa.cy(yo)*zoomMapa-el.clientHeight/2;
+}
+$("zoomMas").onclick=()=>fijarZoom(zoomMapa*1.25);
+$("zoomMenos").onclick=()=>fijarZoom(zoomMapa/1.25);
+$("centrarMapa").onclick=centrarMapa;
+(()=>{
+  const el=$("mapa");let pinza=null,arrastre=null,arrastrado=false;
+  const dist=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  el.addEventListener("touchstart",e=>{if(e.touches.length===2)pinza={d:dist(e),z:zoomMapa}},{passive:true});
+  el.addEventListener("touchmove",e=>{if(pinza&&e.touches.length===2){e.preventDefault();fijarZoom(pinza.z*dist(e)/pinza.d)}},{passive:false});
+  el.addEventListener("touchend",e=>{if(e.touches.length<2)pinza=null});
+  el.addEventListener("pointerdown",e=>{if(e.pointerType!=="mouse")return;arrastre={x:e.clientX,y:e.clientY,l:el.scrollLeft,t:el.scrollTop};arrastrado=false});
+  window.addEventListener("pointermove",e=>{if(!arrastre)return;const dx=e.clientX-arrastre.x,dy=e.clientY-arrastre.y;
+    if(Math.abs(dx)+Math.abs(dy)>4)arrastrado=true;if(arrastrado){el.scrollLeft=arrastre.l-dx;el.scrollTop=arrastre.t-dy}});
+  window.addEventListener("pointerup",()=>{arrastre=null});
+  // Un arrastre no cuenta como toque en un hexágono.
+  el.addEventListener("click",e=>{if(arrastrado){e.stopPropagation();e.preventDefault();arrastrado=false}},true);
+})();
 function pintarMapa(){
   const cb=combate, m=cb&&cb.mapa; $("panelMapa").hidden=!m; if(!m)return;
   const f=m.filas, R=17, W=Math.sqrt(3)*R, cols=Math.max(...f.map(r=>r.length));
@@ -281,7 +320,10 @@ function pintarMapa(){
     svg+=`<g class="ficha ${cls} ${c.activo?"":"caida"} ${c.id===cb.turno?"turno":""}"><circle cx="${cx(h)}" cy="${cy(h)}" r="${R*0.62}"/><text x="${cx(h)}" y="${cy(h)+4}">${esc(ini)}</text><title>${esc(c.id)}</title></g>`});
   [["antes","1"],["despues","2"]].forEach(([t,n])=>{const m=movMapa[t];if(m)svg+=`<circle cx="${cx(m.destino)}" cy="${cy(m.destino)}" r="${R*0.35}" class="destino"/><text x="${cx(m.destino)}" y="${cy(m.destino)-R*0.45}" class="hxt">${n}</text>`});
   const w=W*(cols+0.5)+2,h=1.5*R*f.length+R/2+2;
-  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" role="img" aria-label="Mapa del combate">${svg}</svg>`;
+  geoMapa={w,h,cx,cy};
+  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${svg}</svg>`;
+  if(!mapaCentrado||(tuyo&&turnoPrevio!=="Shalock")){mapaCentrado=true;requestAnimationFrame(centrarMapa)}
+  turnoPrevio=cb.turno;
   const desc=t=>movMapa[t]?`${movMapa[t].coste} pies hasta ${movMapa[t].destino.join(",")}`:"sin mover";
   $("infoMapa").textContent=tuyo?`Marcando el tramo ${tramo()==="antes"?"1, antes":"2, después"} de la acción (cámbialo en «Cuándo»). Antes: ${desc("antes")} · Después: ${desc("despues")} · Te quedan ${quedanPies()} pies. Toca el punto de partida del tramo para borrarlo.`:"Iniciales: tu ficha en naranja, aliados en verde, enemigos en rojo.";
   $("mapa").querySelectorAll(".hx").forEach(p=>p.onclick=()=>{
