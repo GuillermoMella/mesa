@@ -264,7 +264,7 @@ function pintarMapa(){
   const color={".":"var(--hex-suelo)","#":"var(--hex-muro)","~":"var(--hex-dificil)","w":"var(--hex-agua)","o":"var(--hex-cob)","O":"var(--hex-cob)"};
   const tuyo=cb.turno==="Shalock", yo=yoPos();
   let alc={coste:{}};
-  if(tuyo&&yo){const hos=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos).map(c=>c.pos),ali=cb.combatientes.filter(c=>c.bando==="cuadrilla"&&c.activo&&c.pos&&!c.es_pj).map(c=>c.pos);
+  if(tuyo&&yo){const hos=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos).map(c=>c.pos),ali=cb.combatientes.filter(c=>c.pos&&!c.es_pj&&(c.bando==="cuadrilla"||!c.activo)).map(c=>c.pos);
     alc=alcanzablesHex(f,yo,quedanPies(),hos,ali)}
   const pts=(h)=>{const X=cx(h),Y=cy(h);return[0,1,2,3,4,5].map(i=>{const a=Math.PI/180*(60*i-30);return(X+R*Math.cos(a)).toFixed(1)+","+(Y+R*Math.sin(a)).toFixed(1)}).join(" ")};
   const ruta=new Set(movMapa?movMapa.ruta.map(k):[]);
