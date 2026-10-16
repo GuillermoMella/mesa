@@ -64,6 +64,14 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 #mapa{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 #mapa svg{display:block;max-width:none}
 .zoom{display:flex;gap:6px;margin:0 0 6px}
+/* PC: con combate abierto, dos columnas; el combate y el mapa a la izquierda, Shalock y el turno a la derecha. */
+@media (min-width:1000px){
+  .wrap:has(#panelCombate:not([hidden])){max-width:1500px;grid-template-columns:minmax(0,1.7fr) minmax(380px,1fr);align-items:start}
+  .wrap:has(#panelCombate:not([hidden]))>header{grid-column:1/-1}
+  .wrap:has(#panelCombate:not([hidden]))>#panelCombate{grid-column:1;grid-row:2/span 30}
+  .wrap:has(#panelCombate:not([hidden]))>section:not(#panelCombate){grid-column:2}
+  .wrap:has(#panelCombate:not([hidden])) #mapa{max-height:calc(100vh - 240px)}
+}
 .zoom button{width:auto;flex:0 0 auto;min-width:44px;min-height:40px;padding:6px 12px}
 .hx{stroke:var(--line);stroke-width:1}
 .hx.alcanza{stroke:var(--ok);stroke-width:2;cursor:pointer}
