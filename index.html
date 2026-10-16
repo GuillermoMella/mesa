@@ -88,6 +88,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .opciones label{display:flex;gap:6px;align-items:center;color:var(--fg)}
 .sub{display:grid;gap:8px;padding-left:10px;border-left:2px solid var(--line)}
 .sub:empty{display:none}
+.fila{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
 </style>
 </head>
@@ -157,7 +158,17 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <label for="selAccion">Acción<select id="selAccion"></select></label>
     <div class="sub" id="cfgAccion"></div>
     <div class="opciones"><label><input type="radio" name="ordenAd" value="antes" checked> Adicional antes de la acción</label><label><input type="radio" name="ordenAd" value="despues"> Después</label></div>
-    <label for="notas">Movimiento y notas<input id="notas" placeholder="Me acerco al capitán por la izquierda…"></label>
+    <div class="sub" id="panelMov">
+      <div class="eyebrow">Movimiento</div>
+      <div class="estado" id="velInfo"></div>
+      <label id="lblLevantar" hidden><input type="checkbox" id="levantar"> Levantarme del suelo (cuesta la mitad de la velocidad)</label>
+      <div class="fila">
+        <label for="movPies">Pies<input type="number" id="movPies" min="0" step="5" value="0" inputmode="numeric"></label>
+        <label for="movDir">Hacia dónde<select id="movDir"><option value="hacia">acercarme a</option><option value="lejos de">alejarme de</option><option value="">otro</option></select></label>
+      </div>
+      <label for="movRef">Respecto de<select id="movRef"></select></label>
+    </div>
+    <label for="notas">Notas<input id="notas" placeholder="Por la izquierda, pegado al muro…"></label>
     <div class="estado" id="avisos"></div>
     <div class="estado" id="resTurno"></div>
     <button id="enviarTurno">Tirar y enviar turno</button>
@@ -243,6 +254,9 @@ function pintarCombate(cb){
   $("selAccion").innerHTML=ac.join(""); $("selAccion").value=form.accion;
   $("selAccion").disabled=!!(eco.accion&&tuyo2); if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
   $("cfgAdicional").innerHTML=campos("ad",form.adicional); $("cfgAccion").innerHTML=campos("ac",form.accion);
+  const previoRef=$("movRef").value;
+  $("movRef").innerHTML=cb.combatientes.filter(c=>c.activo&&c.id!=="Shalock").map(c=>`<option ${c.id===previoRef?"selected":""}>${esc(c.id)}</option>`).join("");
+  $("lblLevantar").hidden=!(s.condiciones||[]).includes("derribado");
   restaurar(); revisar(); pintarDano(); pintarReaccion();
 }
 
@@ -280,6 +294,7 @@ function campos(p,valor){
     h.push(`<div class="estado">Hasta ${maxObjetivos(o,p)} criatura(s) con este espacio.</div><div class="opciones">${lista.map(x=>`<label><input type="checkbox" data-k="${p}_obj_${esc(x)}"> ${esc(x)}</label>`).join("")}</div>`);
   }
   if(o.caracteristica)h.push(selector(`${p}_car`,["FUE","DES","CON","INT","SAB","CAR"],"Característica (desventaja en sus pruebas)"));
+  if(o.prueba){const hb=s.habilidades||{};h.push(selector(`${p}_hab`,Object.entries(hb).map(([k,v])=>({v:k,t:`${k} ${v>=0?"+":""}${v}`})),"Prueba"))}
   if(o.palabra)h.push(`<label>Palabra<input data-k="${p}_palabra" placeholder="Huye, Suelta, Al suelo…"></label>`);
   if(o.puntos)h.push(`<label>Puntos de la reserva<input type="number" min="1" max="${s.recursos.imposicion}" data-k="${p}_puntos"></label>`);
   return h.join("");
@@ -290,6 +305,15 @@ $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(com
 $("selAccion").onchange=ev=>{form.accion=ev.target.value;pintarCombate(combate)};
 document.querySelectorAll("input[name=ordenAd]").forEach(x=>x.onchange=()=>{form.orden=x.value});
 $("notas").oninput=ev=>{form.notas=ev.target.value};
+["movPies","movDir","movRef","levantar"].forEach(id=>$(id).addEventListener("input",()=>revisar()));
+function movimientoElegido(){
+  const s=combate.shalock, mv=[];
+  if($("levantar").checked&&!$("lblLevantar").hidden)mv.push({tipo:"levantarse"});
+  const pies=Math.max(0,Number($("movPies").value)||0);
+  if(pies>0)mv.push({tipo:"mover",pies,direccion:$("movDir").value,respecto:$("movRef").value});
+  const coste=pies+(mv.some(m=>m.tipo==="levantarse")?Math.floor(s.velocidad/2):0);
+  return{mv,pies,coste};
+}
 
 // Reglas que la app revisa antes de enviar.
 function revisar(){
@@ -307,7 +331,14 @@ function revisar(){
   if(ac&&ac.id==="imposicion"&&!(Number(form.c.ac_puntos)>0&&Number(form.c.ac_puntos)<=s.recursos.imposicion))bloqueos.push("Indica cuántos puntos de la reserva usas.");
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
   if(combate.turno!=="Shalock")bloqueos.push("Espera tu turno: puedes dejarlo armado.");
-  if(!form.accion&&!form.adicional)bloqueos.push("Elige al menos una acción.");
+  const eco=s.economia||{}, correr=eco.correr||form.accion==="com:Correr", vel=s.velocidad||30;
+  const agarrado=(s.condiciones||[]).includes("agarrado"), maximo=agarrado?0:vel*(correr?2:1), usados=eco.movimiento||0, mov=movimientoElegido();
+  $("velInfo").textContent=agarrado?"Estás agarrado: tu velocidad es 0.":`Velocidad ${vel} pies${correr?" (+"+vel+" por Correr)":""} · usados ${usados} · quedan ${Math.max(0,maximo-usados)}`;
+  if(mov.coste>maximo-usados)bloqueos.push(agarrado?"Agarrado: no puedes moverte (prueba con Escapar de un agarre).":`Movimiento: te quedan ${Math.max(0,maximo-usados)} pies y quieres gastar ${mov.coste}.`);
+  if(mov.pies%5)avisos.push("El movimiento se cuenta de a 5 pies.");
+  const ref=combate.combatientes.find(c=>c.id===$("movRef").value);
+  if(mov.pies>0&&$("movDir").value==="lejos de"&&ref&&ref.bando==="enemigo"&&form.accion!=="com:Desenganchar")avisos.push(`Si ${ref.id} está junto a ti, alejarte provoca su ataque de oportunidad (salvo que Desenganches).`);
+  if(!form.accion&&!form.adicional&&!mov.mv.length)bloqueos.push("Elige al menos una acción o un movimiento.");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
   return bloqueos.length===0;
@@ -333,6 +364,7 @@ function describir(p,valor){
   if(o.espacio){x.espacio=form.c[`${p}_espacio`];x.nivel=nivelDe(x.espacio)}
   if(o.caracteristica)x.caracteristica=form.c[`${p}_car`];
   if(o.palabra)x.palabra=form.c[`${p}_palabra`]||"";
+  if(o.prueba)x.habilidad=form.c[`${p}_hab`];
   if(o.puntos)x.puntos=Number(form.c[`${p}_puntos`]);
   if(o.concentracion)x.concentracion=true;
   return x;
@@ -344,8 +376,9 @@ function tirarTurno(){
   let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
   if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio"||ad.id==="mover_maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
   if(ac&&ac.tipo==="ataque")Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,form.c.ac_ventaja?"ventaja":form.c.ac_desventaja?"desventaja":null,{maldicion,maleficio,abrasador}));
+  if(ac&&ac.id==="escapar"){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
   if(ac&&ac.id==="curar")ac.curacion=tirarExpr(`${ac.nivel||1}d8+4`,false,false);
-  return{tipo:"turno",adicional:ad,accion:ac,orden:form.orden,notas:form.notas,ts:Date.now()};
+  return{tipo:"turno",adicional:ad,accion:ac,movimientos:movimientoElegido().mv,orden:form.orden,notas:form.notas,ts:Date.now()};
 }
 
 // Paso 1: solo el d20. El vigilante del PC devuelve el veredicto sin mostrar la CA.
@@ -432,7 +465,8 @@ function resumen(t){
     :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${parte(Object.assign({tipo:"PG"},x.curacion))}`:""}`
     :x.tipo==="comun"?x.nombre:x.texto;
   if(t.adicional)out.push("Adicional: "+txt(t.adicional));
-  if(t.accion)out.push("Acción: "+txt(t.accion));
+  if(t.accion)out.push("Acción: "+txt(t.accion)+(t.accion.tirada?` (${t.accion.habilidad}: ${t.accion.tirada.dados.join("")} ${t.accion.tirada.expresion.replace(/^1d20/,"")} = ${t.accion.tirada.total})`:""));
+  if(t.movimientos&&t.movimientos.length)out.push("Movimiento: "+t.movimientos.map(m=>m.tipo==="levantarse"?"se levanta":`${m.pies} pies ${m.direccion} ${m.respecto}`).join(", "));
   return out.join(" · ");
 }
 
@@ -445,7 +479,7 @@ $("enviarTurno").addEventListener("click",async()=>{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioTurno.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de Shalock",content:b64(JSON.stringify(t))})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
-    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{}});$("notas").value="";
+    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{}});$("notas").value="";$("movPies").value=0;$("levantar").checked=false;
     $("enviarTurno").textContent="Tirar y enviar turno";
     est.className="estado ok";est.textContent="Turno enviado al DM.";
     pintarCombate(combate);
