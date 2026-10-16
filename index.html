@@ -6,12 +6,12 @@
 <title>Mesa de Shalock</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Alegreya+Sans:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Una columna de mesa: lo que dice el DM, la tirada pedida, el envío. Tema oscuro deliberado. */
+/* Mesa de Shalock: arriba lo inmediato (turno, tirada, reacción, daño); debajo, pestañas. Tema oscuro frío. */
 :root{
-  --bg:#14110f; --panel:#1f1a17; --line:#3a302a; --fg:#e8dfd4; --muted:#a3968a;
-  --ember:#d9772b; --ok:#7fae6a; --bad:#cf5b4f;
+  --bg:#0e1116; --panel:#161b22; --line:#2b3340; --fg:#e6edf3; --muted:#8b97a8;
+  --ember:#8b7cf6; --ok:#4fbf8a; --bad:#ef6461; --warn:#e3b341; --sel:#211d3a;
   --display:"Cinzel",Georgia,serif; --body:"Alegreya Sans",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
-  --hex-suelo:#2b2420; --hex-muro:#6b5a4c; --hex-dificil:#3f3a22; --hex-agua:#1e3542; --hex-cob:#4a3a2a;
+  --hex-suelo:#1f2630; --hex-muro:#4a5568; --hex-dificil:#2b3a30; --hex-agua:#173550; --hex-cob:#343a50;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -45,7 +45,7 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
 .grupo{display:grid;gap:8px}
 .grupo>.eyebrow{margin-top:4px}
 .ap{font-size:.8rem;border-radius:999px;padding:1px 10px;border:1px solid currentColor}
-.ap.ileso{color:var(--ok)} .ap.herido{color:var(--ember)} .ap.muy{color:var(--bad)} .ap.caido{color:var(--muted)}
+.ap.ileso{color:var(--ok)} .ap.herido{color:var(--warn)} .ap.muy{color:var(--bad)} .ap.caido{color:var(--muted)}
 .pips{letter-spacing:2px;color:var(--ember);font-size:1.05rem}
 /* Toques cómodos en el celular: 44 px mínimo y texto de 16 px (sin zoom automático). */
 button,select,input{min-height:44px;font-size:16px}
@@ -64,14 +64,36 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 #mapa{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 #mapa svg{display:block;max-width:none}
 .zoom{display:flex;gap:6px;margin:0 0 6px}
-/* PC: con combate abierto, dos columnas; el combate y el mapa a la izquierda, Shalock y el turno a la derecha. */
+/* Zona inmediata: lo que pide respuesta ya. */
+.wrap>*,.arriba>*,.pane>*{min-width:0}  /* que nada estire la columna más que la pantalla */
+.arriba{display:grid;gap:10px}
+.arriba:empty{display:none}
+.urgente{border-color:var(--ember);box-shadow:0 0 0 1px var(--ember) inset}
+/* Pestañas (solo con combate abierto). */
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;background:var(--bg);padding-top:4px;scrollbar-width:none}
+.tabs button{width:auto;flex:1 0 auto;background:transparent;color:var(--muted);border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 12px;font-weight:700}
+.tabs button.activa{color:var(--fg);border-bottom-color:var(--ember)}
+.wrap.con-pestanas .pane:not(.activa){display:none}
+/* PC: el combate con el mapa fijo a la izquierda; lo inmediato y las pestañas a la derecha. */
 @media (min-width:1000px){
-  .wrap:has(#panelCombate:not([hidden])){max-width:1500px;grid-template-columns:minmax(0,1.7fr) minmax(380px,1fr);align-items:start}
-  .wrap:has(#panelCombate:not([hidden]))>header{grid-column:1/-1}
-  .wrap:has(#panelCombate:not([hidden]))>#panelCombate{grid-column:1;grid-row:2/span 30}
-  .wrap:has(#panelCombate:not([hidden]))>section:not(#panelCombate){grid-column:2}
-  .wrap:has(#panelCombate:not([hidden])) #mapa{max-height:calc(100vh - 240px)}
+  .wrap.con-pestanas{max-width:1500px;grid-template-columns:minmax(0,1.7fr) minmax(380px,1fr);align-items:start}
+  .wrap.con-pestanas>header,.wrap.con-pestanas>#ajustes{grid-column:1/-1}
+  .wrap.con-pestanas>#panelCombate{display:grid!important;grid-column:1;grid-row:2/span 40}
+  .wrap.con-pestanas>:not(header):not(#ajustes):not(#panelCombate){grid-column:2}
+  .wrap.con-pestanas .tabs [data-tab=mapa]{display:none}
+  .wrap.con-pestanas #mapa{max-height:calc(100vh - 240px)}
 }
+/* Listas emergentes en lugar de desplegables. */
+select.oculto{display:none}
+.selbtn{background:var(--bg);color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px}
+.selbtn::after{content:"▸";color:var(--muted)}
+.selbtn:disabled{opacity:.5}
+.hoja-fondo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.hoja{background:var(--panel);border:1px solid var(--line);border-radius:12px 12px 0 0;width:100%;max-width:560px;max-height:75vh;overflow:auto;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
+.hoja .eyebrow{padding:0 4px}
+.hoja button{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left}
+.hoja button.actual{border-color:var(--ember);background:var(--sel);font-weight:700}
+@media (min-width:700px){.hoja-fondo{align-items:center}.hoja{border-radius:12px}}
 .zoom button{width:auto;flex:0 0 auto;min-width:44px;min-height:40px;padding:6px 12px}
 .hx{stroke:var(--line);stroke-width:1}
 .hx.alcanza{stroke:var(--ok);stroke-width:2;cursor:pointer}
@@ -100,7 +122,7 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 .c-desc{font-size:.9rem;color:var(--muted)}
 .barra{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
 .barra>i{display:block;height:100%;background:var(--ok)}
-.barra.media>i{background:var(--ember)} .barra.baja>i{background:var(--bad)}
+.barra.media>i{background:var(--warn)} .barra.baja>i{background:var(--bad)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
 .chip.on{border-color:var(--ember);color:var(--ember)}
@@ -109,7 +131,7 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 .rec b{font-family:var(--mono);font-size:1.1rem;display:block}
 .acciones{display:grid;gap:8px}
 .acc{background:transparent;color:var(--fg);border:1px solid var(--line);text-align:left;font-weight:400;padding:10px 12px}
-.acc.sel{border-color:var(--ember);background:#2a211b}
+.acc.sel{border-color:var(--ember);background:var(--sel)}
 .acc small{display:block;font-family:var(--mono);color:var(--muted)}
 select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
 .opciones{display:flex;gap:14px;flex-wrap:wrap;font-size:.95rem}
@@ -135,45 +157,25 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado">Se guarda solo en este navegador.</div>
   </section>
 
-  <section class="panel" aria-live="polite">
-    <div class="eyebrow">Lo que dice el DM</div>
-    <p id="mensaje">Conectando…</p>
-  </section>
-
-  <section class="panel" id="panelPedido">
+  <!-- Lo inmediato, arriba y solo: turno, tirada pedida, reacción y daño. -->
+  <div class="arriba" id="arriba">
+    <div id="turno"></div>
+    <section class="panel urgente" id="panelPedido" hidden>
     <div class="eyebrow">Tirada pedida</div>
     <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
     <button id="tirar" disabled>Tirar y enviar al DM</button>
     <div class="estado" id="estado"></div>
   </section>
-
-  <section class="panel" id="panelCombate" hidden>
-    <div class="eyebrow">Combate</div>
-    <div class="turno" id="turno"></div>
-    <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
-    <div id="panelMapa" hidden>
-      <div class="zoom"><button class="sec" id="zoomMenos" aria-label="Alejar">−</button><button class="sec" id="zoomMas" aria-label="Acercar">+</button><button class="sec" id="centrarMapa">Centrar en mí</button></div>
-      <div id="mapa"></div><div class="estado" id="infoMapa"></div>
-    </div>
-    <div class="lista" id="combatientes"></div>
-    <details id="panelRegistro"><summary class="eyebrow">Lo que pasó</summary><ol class="registro" id="registro"></ol></details>
-  </section>
-
-  <section class="panel" id="panelShalock" hidden>
-    <div class="eyebrow">Shalock</div>
-    <div class="recursos" id="recursos"></div>
-    <div class="economia" id="economia"></div>
-    <div class="chips" id="efectos"></div>
-    <div class="sub" id="panelReaccion" hidden>
+    <section class="panel urgente" id="panelReaccion" hidden>
       <div class="eyebrow">Reacción disponible</div>
       <div id="motivoReaccion"></div>
       <label for="armaReaccion" id="lblArmaReaccion">Ataque de oportunidad con<select id="armaReaccion"></select></label>
       <button id="atacarReaccion">Atacar</button>
       <button class="sec" id="dejarReaccion">Dejarlo ir</button>
       <div class="estado" id="estadoReaccion"></div>
-    </div>
-    <div class="sub" id="panelDano" hidden>
+    </section>
+    <section class="panel urgente" id="panelDano" hidden>
       <div class="eyebrow">Ataque en curso</div>
       <div id="veredicto"></div>
       <div id="opcDano" hidden>
@@ -184,7 +186,31 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <div class="estado" id="resDano"></div>
       <div class="estado" id="estadoDano"></div>
       <button class="sec" id="cerrarDano" hidden>Listo</button>
+    </section>
+  </div>
+
+  <nav class="tabs" id="tabs" aria-label="Secciones" hidden>
+    <button data-tab="mesa">Mesa</button><button data-tab="mapa">Mapa</button><button data-tab="turno">Mi turno</button><button data-tab="shalock">Shalock</button><button data-tab="registro">Registro</button>
+  </nav>
+
+  <section class="panel pane" data-pane="mesa" aria-live="polite">
+    <div class="eyebrow">Lo que dice el DM</div>
+    <p id="mensaje">Conectando…</p>
+  </section>
+
+  <section class="panel pane" id="panelCombate" data-pane="mapa" hidden>
+    <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
+    <div id="hogarMapa">
+    <div id="panelMapa" hidden>
+      <div class="zoom"><button class="sec" id="zoomMenos" aria-label="Alejar">−</button><button class="sec" id="zoomMas" aria-label="Acercar">+</button><button class="sec" id="centrarMapa">Centrar en mí</button></div>
+      <div id="mapa"></div><div class="estado" id="infoMapa"></div>
     </div>
+    </div>
+    <div class="lista" id="combatientes"></div>
+  </section>
+
+  <section class="panel pane" id="panelTurno" data-pane="turno" hidden>
+    <div id="mapaEnTurno"></div>
     <div class="eyebrow">Armar turno</div>
     <label for="selAdicional">Acción adicional<select id="selAdicional"></select></label>
     <div class="sub" id="cfgAdicional"></div>
@@ -207,6 +233,18 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="resTurno"></div>
     <button id="enviarTurno">Tirar y enviar turno</button>
     <div class="estado" id="estadoTurno"></div>
+  </section>
+
+  <section class="panel pane" id="panelShalock" data-pane="shalock" hidden>
+    <div class="eyebrow">Shalock</div>
+    <div class="recursos" id="recursos"></div>
+    <div class="economia" id="economia"></div>
+    <div class="chips" id="efectos"></div>
+  </section>
+
+  <section class="panel pane" id="panelRegistro" data-pane="registro" hidden>
+    <div class="eyebrow">Lo que pasó</div>
+    <ol class="registro" id="registro"></ol>
   </section>
 
   <div class="pie"><span id="conexion">Sin conectar</span><span id="hora"></span></div>
@@ -238,9 +276,68 @@ function pintar(e){
     if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
-  $("panelPedido").hidden=!pedido&&!!e.combate;
+  $("panelPedido").hidden=!pedido;
   pintarCombate(e.combate||null);
 }
+
+// ---- Pestañas ----
+// Con combate: Mesa, Mapa, Mi turno, Shalock, Registro. En el celular el mapa también se ve en «Mi turno»
+// (para marcar el movimiento sin cambiar de pestaña); en el PC queda fijo a la izquierda.
+let pestana="mesa",turnoVisto=null;
+try{pestana=localStorage.getItem("mesa_pestana")||"mesa"}catch(e){}
+const esPC=()=>matchMedia("(min-width:1000px)").matches;
+function elegirPestana(nombre){
+  pestana=nombre;try{localStorage.setItem("mesa_pestana",nombre)}catch(e){}
+  const pc=esPC(), efectiva=pc&&nombre==="mapa"?"turno":nombre;
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("activa",b.dataset.tab===efectiva));
+  document.querySelectorAll(".pane").forEach(s=>s.classList.toggle("activa",s.dataset.pane===efectiva));
+  // El mapa vive en «Mapa»; en el celular, con «Mi turno» abierto, se muda arriba del armado.
+  const destino=!pc&&efectiva==="turno"?$("mapaEnTurno"):$("hogarMapa");
+  if($("panelMapa").parentElement!==destino){destino.appendChild($("panelMapa"));if(typeof centrarMapa==="function")requestAnimationFrame(centrarMapa)}
+}
+function pestanas(cb){
+  const wrap=document.querySelector(".wrap");
+  wrap.classList.toggle("con-pestanas",!!cb); $("tabs").hidden=!cb;
+  if(!cb){document.querySelectorAll(".pane").forEach(s=>s.classList.remove("activa"));return}
+  // Al empezar tu turno se abre «Mi turno».
+  if(cb.turno==="Shalock"&&turnoVisto!=="Shalock")pestana="turno";
+  turnoVisto=cb.turno;
+  elegirPestana(pestana);
+}
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>elegirPestana(b.dataset.tab)));
+matchMedia("(min-width:1000px)").addEventListener("change",()=>{if(combate)elegirPestana(pestana)});
+
+// ---- Listas emergentes en lugar de desplegables ----
+// Cada <select> queda oculto y un botón abre sus opciones en una hoja; elegir cambia el select y avisa
+// con los mismos eventos, así la lógica de la página no cambia.
+function etiquetaDe(sel){const l=sel.closest("label");if(!l)return"";return[...l.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(" ").trim()}
+function abrirLista(sel){
+  const fondo=document.createElement("div");fondo.className="hoja-fondo";
+  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const tit=etiquetaDe(sel);if(tit){const e=document.createElement("div");e.className="eyebrow";e.textContent=tit;hoja.appendChild(e)}
+  [...sel.options].forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.text;b.disabled=o.disabled;
+    if(o.value===sel.value)b.className="actual";
+    b.onclick=()=>{sel.value=o.value;sel.dispatchEvent(new Event("input",{bubbles:true}));sel.dispatchEvent(new Event("change",{bubbles:true}));cerrar();mejorarSelects()};
+    hoja.appendChild(b)});
+  const cancelar=document.createElement("button");cancelar.type="button";cancelar.className="sec";cancelar.textContent="Cancelar";cancelar.onclick=()=>cerrar();hoja.appendChild(cancelar);
+  fondo.appendChild(hoja);document.body.appendChild(fondo);
+  const tecla=e=>{if(e.key==="Escape")cerrar()};
+  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla);sel._boton&&sel._boton.focus()}
+  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);
+  (hoja.querySelector("button.actual")||hoja.querySelector("button")).focus();
+}
+function mejorarSelects(){
+  document.querySelectorAll("select").forEach(sel=>{
+    let b=sel._boton;
+    if(!b||!b.isConnected){b=document.createElement("button");b.type="button";b.className="selbtn";sel.after(b);sel.classList.add("oculto");sel._boton=b;b.addEventListener("click",()=>abrirLista(sel))}
+    const txt=(sel.selectedOptions[0]&&sel.selectedOptions[0].text)||"Elegir…";
+    if(b.textContent!==txt)b.textContent=txt;  // sin cambios no hay mutación: el observador no se repite
+    if(b.disabled!==sel.disabled)b.disabled=sel.disabled;
+  });
+}
+let mejoraPendiente=false;
+new MutationObserver(()=>{if(!mejoraPendiente){mejoraPendiente=true;requestAnimationFrame(()=>{mejoraPendiente=false;mejorarSelects()})}}).observe(document.body,{childList:true,subtree:true});
+document.addEventListener("change",e=>{if(e.target.tagName==="SELECT")mejorarSelects()});
 
 // ---- Mapa de hexágonos (DGT-205) ----
 // Filas «odd-r»: las impares van corridas medio hexágono. 5 pies por paso, 10 en terreno difícil.
@@ -358,6 +455,8 @@ const ataque=id=>combate.shalock.acciones.find(a=>a.id===id);
 function pintarCombate(cb){
   combate=cb;
   $("panelCombate").hidden=!cb; $("panelShalock").hidden=!(cb&&cb.shalock);
+  $("panelTurno").hidden=!(cb&&cb.shalock); $("panelRegistro").hidden=!cb; $("turno").hidden=!cb;
+  pestanas(cb);
   if(!cb)return;
   const tuyo=cb.turno==="Shalock";
   $("turno").innerHTML=`<div class="banner ${tuyo?"tuyo":""}">${tuyo?"Es tu turno":cb.turno?"Turno de "+esc(cb.turno):"Preparando el combate"}</div><div class="c-dato" style="text-align:center">Ronda ${cb.ronda}</div>`;
@@ -373,9 +472,6 @@ function pintarCombate(cb){
   $("registro").innerHTML=(cb.registro||[]).slice().reverse().map(r=>`<li><span class="r">R${r.ronda}</span> <b>${esc(r.quien)}</b> ${esc(r.texto)}</li>`).join("")||"<li>Todavía nada.</li>";
   const cuad=cb.combatientes.filter(c=>c.bando==="cuadrilla"), ene=cb.combatientes.filter(c=>c.bando==="enemigo");
   $("combatientes").innerHTML=`<div class="grupo"><div class="eyebrow">Enemigos</div>${ene.map(tarjeta).join("")}</div><div class="grupo"><div class="eyebrow">Cuadrilla</div>${cuad.map(tarjeta).join("")}</div>`;
-  // En combate, lo del combate va arriba y la tirada pedida solo si hay una.
-  const wrap=document.querySelector(".wrap"), head=wrap.querySelector("header");
-  head.after($("panelCombate")); $("panelCombate").after($("panelShalock"));
   const s=cb.shalock; if(!s)return;
   const r=s.recursos;
   const pips=(n,max)=>n==null?"–":`<span class="pips">${"●".repeat(Math.max(0,n))}<span class="vacio">${"○".repeat(Math.max(0,(max||n)-n))}</span></span>`;
