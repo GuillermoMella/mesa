@@ -83,6 +83,20 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
   .wrap.con-pestanas .tabs [data-tab=mapa]{display:none}
   .wrap.con-pestanas #mapa{max-height:calc(100vh - 240px)}
 }
+/* Pasos del turno: lista ordenable. */
+.pasos{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.paso{border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:var(--panel)}
+.paso.arrastrando{opacity:.6;border-color:var(--ember)}
+.paso.activo{border-color:var(--ember)}
+.paso .asa{cursor:grab;touch-action:none;user-select:none;color:var(--muted);font-size:1.2rem;padding:8px 6px;line-height:1}
+.paso .paso-tit{background:transparent;color:var(--fg);border:0;text-align:left;font-weight:700;padding:6px 4px}
+.paso .paso-tit small{display:block;font-weight:400;color:var(--muted)}
+.paso .quitar{min-width:40px}
+.paso .paso-cfg{grid-column:1/-1;display:grid;gap:8px}
+.paso .paso-cfg:empty{display:none}
+.tramos{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px}
+.tramos button{width:auto;min-height:36px;padding:4px 10px;font-weight:400;background:transparent;color:var(--fg);border:1px solid var(--line)}
+.tramos button.activa{border-color:var(--ember);background:var(--sel);font-weight:700}
 /* Listas emergentes en lugar de desplegables. */
 select.oculto{display:none}
 .selbtn{background:var(--bg);color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px}
@@ -202,6 +216,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
     <div id="hogarMapa">
     <div id="panelMapa" hidden>
+      <div class="tramos" id="tramosMapa" aria-label="Qué movimiento marcas"></div>
       <div class="zoom"><button class="sec" id="zoomMenos" aria-label="Alejar">−</button><button class="sec" id="zoomMas" aria-label="Acercar">+</button><button class="sec" id="centrarMapa">Centrar en mí</button></div>
       <div id="mapa"></div><div class="estado" id="infoMapa"></div>
     </div>
@@ -212,21 +227,14 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section class="panel pane" id="panelTurno" data-pane="turno" hidden>
     <div id="mapaEnTurno"></div>
     <div class="eyebrow">Armar turno</div>
-    <label for="selAdicional">Acción adicional<select id="selAdicional"></select></label>
-    <div class="sub" id="cfgAdicional"></div>
-    <label for="selAccion">Acción<select id="selAccion"></select></label>
-    <div class="sub" id="cfgAccion"></div>
-    <div class="opciones"><label><input type="radio" name="ordenAd" value="antes" checked> Adicional antes de la acción</label><label><input type="radio" name="ordenAd" value="despues"> Después</label></div>
-    <div class="sub" id="panelMov">
-      <div class="eyebrow">Movimiento</div>
-      <div class="estado" id="velInfo"></div>
-      <label id="lblLevantar" hidden><input type="checkbox" id="levantar"> Levantarme del suelo (cuesta la mitad de la velocidad)</label>
-      <div class="fila">
-        <label for="movPies">Pies<input type="number" id="movPies" min="0" step="5" value="0" inputmode="numeric"></label>
-        <label for="movDir">Hacia dónde<select id="movDir"><option value="hacia">acercarme a</option><option value="lejos de">alejarme de</option><option value="">otro</option></select></label>
-      </div>
-      <label for="movRef">Respecto de<select id="movRef"></select></label>
-      <label for="movMomento">Cuándo<select id="movMomento"><option value="antes">antes de la acción</option><option value="despues">después de la acción</option></select></label>
+    <div class="estado" id="velInfo"></div>
+    <label id="lblLevantar" hidden><input type="checkbox" id="levantar"> Levantarme del suelo al empezar (cuesta la mitad de la velocidad)</label>
+    <ol class="pasos" id="pasos" aria-label="Pasos del turno, en orden"></ol>
+    <button class="sec" id="agregarPaso">+ Agregar acción, acción adicional o movimiento</button>
+    <!-- Menús y campos que los pasos usan por dentro. -->
+    <div hidden id="guardaPasos">
+      <select id="selAdicional" data-sin-boton></select><div class="sub" id="cfgAdicional"></div>
+      <select id="selAccion" data-sin-boton></select><div class="sub" id="cfgAccion"></div>
     </div>
     <label for="notas">Notas<input id="notas" placeholder="Por la izquierda, pegado al muro…"></label>
     <div class="estado" id="avisos"></div>
@@ -311,10 +319,22 @@ matchMedia("(min-width:1000px)").addEventListener("change",()=>{if(combate)elegi
 // Cada <select> queda oculto y un botón abre sus opciones en una hoja; elegir cambia el select y avisa
 // con los mismos eventos, así la lógica de la página no cambia.
 function etiquetaDe(sel){const l=sel.closest("label");if(!l)return"";return[...l.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(" ").trim()}
-function abrirLista(sel){
+function abrirHoja(titulo,opciones,elegir){
   const fondo=document.createElement("div");fondo.className="hoja-fondo";
   const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
-  const tit=etiquetaDe(sel);if(tit){const e=document.createElement("div");e.className="eyebrow";e.textContent=tit;hoja.appendChild(e)}
+  if(titulo){const e=document.createElement("div");e.className="eyebrow";e.textContent=titulo;hoja.appendChild(e)}
+  opciones.forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.t;b.disabled=!!o.no;b.onclick=()=>{cerrar();elegir(o.v)};hoja.appendChild(b)});
+  const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
+  fondo.appendChild(hoja);document.body.appendChild(fondo);
+  const tecla=e=>{if(e.key==="Escape")cerrar()};
+  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla)}
+  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);
+  (hoja.querySelector("button:not(:disabled)")||c).focus();
+}
+function abrirLista(sel,titulo){
+  const fondo=document.createElement("div");fondo.className="hoja-fondo";
+  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const tit=titulo||etiquetaDe(sel);if(tit){const e=document.createElement("div");e.className="eyebrow";e.textContent=tit;hoja.appendChild(e)}
   [...sel.options].forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.text;b.disabled=o.disabled;
     if(o.value===sel.value)b.className="actual";
     b.onclick=()=>{sel.value=o.value;sel.dispatchEvent(new Event("input",{bubbles:true}));sel.dispatchEvent(new Event("change",{bubbles:true}));cerrar();mejorarSelects()};
@@ -327,7 +347,7 @@ function abrirLista(sel){
   (hoja.querySelector("button.actual")||hoja.querySelector("button")).focus();
 }
 function mejorarSelects(){
-  document.querySelectorAll("select").forEach(sel=>{
+  document.querySelectorAll("select:not([data-sin-boton])").forEach(sel=>{
     let b=sel._boton;
     if(!b||!b.isConnected){b=document.createElement("button");b.type="button";b.className="selbtn";sel.after(b);sel.classList.add("oculto");sel._boton=b;b.addEventListener("click",()=>abrirLista(sel))}
     const txt=(sel.selectedOptions[0]&&sel.selectedOptions[0].text)||"Elegir…";
@@ -363,14 +383,28 @@ function coberturaHex(f,a,b,ocupadas=[]){const n=distHex(a,b),A=aCubo(a),B=aCubo
   for(let i=1;i<n;i++){const t=i/n,h=deCubo(A[0]+(B[0]-A[0])*t+1e-6,A[1]+(B[1]-A[1])*t+2e-6,A[2]+(B[2]-A[2])*t-3e-6);hs.push(k(h));cs.push(celdaHex(f,h))}
   const tapa=ocupadas.some(o=>hs.includes(k(o)));
   return cs.includes("#")?null:cs.includes("O")?5:(cs.includes("o")||tapa)?2:0}
-let movMapa={antes:null,despues:null}; // cada tramo: {destino, coste, ruta}
-const tramo=()=>$("movMomento").value==="despues"?"despues":"antes";
-const origenTramo=t=>t==="despues"&&movMapa.antes?movMapa.antes.destino:yoPos();
-const costeTramos=excluir=>["antes","despues"].filter(t=>t!==excluir&&movMapa[t]).reduce((a,t)=>a+movMapa[t].coste,0);
+// ---- Pasos del turno ----
+// El turno es una lista ordenada: acción, acción adicional y los movimientos que quieras, en cualquier orden
+// (PHB: el movimiento se reparte antes, entre y después de las acciones). Cada movimiento es un tramo.
+let pasos=[], pasoMapa=null, nPaso=0;
+let movMapa={}; // id del paso de movimiento -> {destino, coste, ruta}
+const movers=()=>pasos.filter(x=>x.tipo==="mover");
+const tramo=()=>{const m=movers();return m.some(x=>x.id===pasoMapa)?pasoMapa:(m[0]&&m[0].id)||null};
+// Dónde está Shalock al empezar un paso: después de los tramos anteriores ya marcados.
+function posAntesDe(id){let p=yoPos();for(const x of pasos){if(x.id===id)break;if(x.tipo==="mover"&&movMapa[x.id])p=movMapa[x.id].destino}return p}
+const origenTramo=id=>posAntesDe(id);
+const costeTramos=excluir=>movers().filter(x=>x.id!==excluir&&movMapa[x.id]).reduce((a,x)=>a+movMapa[x.id].coste,0);
+// Si un tramo ya no parte de donde termina el anterior (se reordenó o se cambió otro), se borra.
+function sanearTramos(){let p=yoPos();for(const x of pasos){if(x.tipo!=="mover")continue;const m=movMapa[x.id];if(!m)continue;
+  if(!p||k(m.ruta[0])!==k(p)){delete movMapa[x.id];continue}p=m.destino}
+  Object.keys(movMapa).forEach(id=>{if(!pasos.some(x=>x.id===id))delete movMapa[id]})}
+const idxDe=tipo=>pasos.findIndex(x=>x.tipo===tipo);
+const ordenAdicional=()=>{const a=idxDe("adicional"),b=idxDe("accion");return a<0||b<0||a<b?"antes":"despues"};
+function momentoDe(id){const i=pasos.findIndex(x=>x.id===id),b=idxDe("accion");return b<0||i<b?"antes":"despues"}
 const yoPos=()=>{const y=combate.combatientes.find(c=>c.es_pj);return y&&y.pos};
 function quedanPies(excluir){const s=combate.shalock,eco=s.economia||{},vel=s.velocidad||30;
   if((s.condiciones||[]).includes("agarrado"))return 0;
-  const correr=eco.correr||form.accion==="com:Correr",lev=$("levantar").checked&&!$("lblLevantar").hidden?Math.floor(vel/2):0;
+  const correr=eco.correr||(form.accion==="com:Correr"&&idxDe("accion")>=0),lev=$("levantar").checked&&!$("lblLevantar").hidden?Math.floor(vel/2):0;
   return vel*(correr?2:1)-(eco.movimiento||0)-lev-costeTramos(excluir)}
 // Zoom (botones o pellizco), deslizar (dedo o arrastre con el mouse) y centrar en tu ficha.
 let zoomMapa=1,geoMapa=null,mapaCentrado=false,turnoPrevio=null;
@@ -411,10 +445,10 @@ function pintarMapa(){
   const color={".":"var(--hex-suelo)","#":"var(--hex-muro)","~":"var(--hex-dificil)","w":"var(--hex-agua)","o":"var(--hex-cob)","O":"var(--hex-cob)"};
   const tuyo=cb.turno==="Shalock", yo=yoPos();
   let alc={coste:{}};
-  if(tuyo&&yo){const hos=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos).map(c=>c.pos),ali=cb.combatientes.filter(c=>c.pos&&!c.es_pj&&(c.bando==="cuadrilla"||!c.activo)).map(c=>c.pos);
+  if(tuyo&&yo&&tramo()){const hos=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos).map(c=>c.pos),ali=cb.combatientes.filter(c=>c.pos&&!c.es_pj&&(c.bando==="cuadrilla"||!c.activo)).map(c=>c.pos);
     alc=alcanzablesHex(f,origenTramo(tramo()),quedanPies(tramo()),hos,ali)}
   const pts=(h)=>{const X=cx(h),Y=cy(h);return[0,1,2,3,4,5].map(i=>{const a=Math.PI/180*(60*i-30);return(X+R*Math.cos(a)).toFixed(1)+","+(Y+R*Math.sin(a)).toFixed(1)}).join(" ")};
-  const ruta=new Set([movMapa.antes,movMapa.despues].filter(Boolean).flatMap(m=>m.ruta.map(k)));
+  const ruta=new Set(Object.values(movMapa).flatMap(m=>m.ruta.map(k)));
   const ori=origenTramo(tramo());
   let svg="";
   f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
@@ -423,23 +457,28 @@ function pintarMapa(){
   cb.combatientes.filter(c=>c.pos).forEach(c=>{const h=c.pos,cls=c.es_pj?"yo":c.bando==="enemigo"?"ene":"ali";
     const ini=c.id.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();
     svg+=`<g class="ficha ${cls} ${c.activo?"":"caida"} ${c.id===cb.turno?"turno":""}"><circle cx="${cx(h)}" cy="${cy(h)}" r="${R*0.62}"/><text x="${cx(h)}" y="${cy(h)+4}">${esc(ini)}</text><title>${esc(c.id)}</title></g>`});
-  [["antes","1"],["despues","2"]].forEach(([t,n])=>{const m=movMapa[t];if(m)svg+=`<circle cx="${cx(m.destino)}" cy="${cy(m.destino)}" r="${R*0.35}" class="destino"/><text x="${cx(m.destino)}" y="${cy(m.destino)-R*0.45}" class="hxt">${n}</text>`});
+  movers().forEach((x,i)=>{const m=movMapa[x.id];if(m)svg+=`<circle cx="${cx(m.destino)}" cy="${cy(m.destino)}" r="${R*0.35}" class="destino"/><text x="${cx(m.destino)}" y="${cy(m.destino)-R*0.45}" class="hxt">${i+1}</text>`});
   const w=W*(cols+0.5)+2,h=1.5*R*f.length+R/2+2;
   geoMapa={w,h,cx,cy};
+  const ms=movers();
+  $("tramosMapa").innerHTML=tuyo&&ms.length?ms.map((x,i)=>`<button type="button" data-tramo="${x.id}" class="${x.id===tramo()?"activa":""}">Movimiento ${i+1}${movMapa[x.id]?` · ${movMapa[x.id].coste} p`:""}</button>`).join(""):"";
+  $("tramosMapa").querySelectorAll("button").forEach(b=>b.onclick=()=>{pasoMapa=b.dataset.tramo;pintarMapa();pintarPasos()});
   $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${svg}</svg>`;
   if(!mapaCentrado||(tuyo&&turnoPrevio!=="Shalock")){mapaCentrado=true;requestAnimationFrame(centrarMapa)}
   turnoPrevio=cb.turno;
-  const desc=t=>movMapa[t]?`${movMapa[t].coste} pies hasta ${movMapa[t].destino.join(",")}`:"sin mover";
-  $("infoMapa").textContent=tuyo?`Marcando el tramo ${tramo()==="antes"?"1, antes":"2, después"} de la acción (cámbialo en «Cuándo»). Antes: ${desc("antes")} · Después: ${desc("despues")} · Te quedan ${quedanPies()} pies. Toca el punto de partida del tramo para borrarlo.`:"Iniciales: tu ficha en naranja, aliados en verde, enemigos en rojo.";
+  const nT=movers().findIndex(x=>x.id===tramo())+1;
+  $("infoMapa").textContent=!tuyo?"Iniciales: tu ficha en violeta, aliados en verde, enemigos en rojo."
+    :!nT?"Para moverte, agrega un Movimiento en «Armar turno» (+)."
+    :`Marcando el Movimiento ${nT}: toca un hexágono resaltado. Te quedan ${quedanPies()} pies. Toca su punto de partida para borrarlo.`;
   $("mapa").querySelectorAll(".hx").forEach(p=>p.onclick=()=>{
     if(!tuyo||!yo)return;const h=p.dataset.h.split(",").map(Number);
-    const t=tramo(),o=origenTramo(t);
-    if(k(h)===k(o)){movMapa[t]=null;if(t==="antes")movMapa.despues=null;pintarCombate(combate);return}
+    const t=tramo();if(!t)return;const o=origenTramo(t);
+    if(k(h)===k(o)){delete movMapa[t];sanearTramos();pintarCombate(combate);return}
     if(alc.coste[k(h)]===undefined)return;
     movMapa[t]={destino:h,coste:alc.coste[k(h)],ruta:caminoHex(alc.prev,o,h)};
-    if(t==="antes")movMapa.despues=null; // cambió el punto de partida del segundo tramo
+    sanearTramos(); // los tramos siguientes partían de otro lado
     pintarCombate(combate)});
-  $("mapa").querySelectorAll(".ficha.yo").forEach(g=>g.onclick=()=>{movMapa={antes:null,despues:null};pintarCombate(combate)});
+  $("mapa").querySelectorAll(".ficha.yo").forEach(g=>g.onclick=()=>{movMapa={};pintarCombate(combate)});
 }
 
 // ---- Combate ----
@@ -489,10 +528,10 @@ function pintarCombate(cb){
   $("selAccion").innerHTML=ac.join(""); $("selAccion").value=form.accion;
   $("selAccion").disabled=!!(eco.accion&&tuyo2); if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
   $("cfgAdicional").innerHTML=campos("ad",form.adicional); $("cfgAccion").innerHTML=campos("ac",form.accion);
-  const previoRef=$("movRef").value||form.c.ac_objetivo;
-  $("movRef").innerHTML=cb.combatientes.filter(c=>c.activo&&c.id!=="Shalock").map(c=>`<option ${c.id===previoRef?"selected":""}>${esc(c.id)}</option>`).join("");
   $("lblLevantar").hidden=!(s.condiciones||[]).includes("derribado");
-  document.querySelectorAll("#panelMov .fila, label[for=movRef]").forEach(e=>e.hidden=!!cb.mapa);
+  if(eco.accion&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="accion");
+  if(eco.adicional&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="adicional");
+  pintarPasos();
   if(!form.acManual&&form.c.ad_objetivo&&enemigos().includes(form.c.ad_objetivo))form.c.ac_objetivo=form.c.ad_objetivo;
   restaurar(); pintarMapa(); revisar(); pintarDano(); pintarReaccion();
 }
@@ -550,17 +589,82 @@ document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.data
   if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
 $("selAccion").onchange=ev=>{form.accion=ev.target.value;pintarCombate(combate)};
-document.querySelectorAll("input[name=ordenAd]").forEach(x=>x.onchange=()=>{form.orden=x.value});
 $("notas").oninput=ev=>{form.notas=ev.target.value};
-["movPies","movDir","movRef","levantar","movMomento"].forEach(id=>$(id).addEventListener("input",()=>revisar()));
-$("movMomento").addEventListener("change",()=>{if(combate&&combate.mapa)pintarMapa()});
-function origenAtaque(){return movMapa.antes?movMapa.antes.destino:yoPos()}
+$("levantar").addEventListener("input",()=>{revisar();if(combate&&combate.mapa)pintarMapa()});
+function pintarPasos(){
+  const s=combate&&combate.shalock;if(!s)return;
+  // Los campos de acción y adicional se guardan aparte mientras se rehace la lista.
+  $("guardaPasos").append($("cfgAdicional"),$("cfgAccion"));
+  const nombreDe=sel=>{const o=[...$(sel).options].find(o=>o.value===$(sel).value);return o&&o.value?o.text:""};
+  let nm=0;
+  $("pasos").innerHTML=pasos.map(x=>{
+    let tit,sub="";
+    if(x.tipo==="accion"){tit="Acción";sub=nombreDe("selAccion")||"Toca para elegir"}
+    else if(x.tipo==="adicional"){tit="Acción adicional";sub=nombreDe("selAdicional")||"Toca para elegir"}
+    else{nm++;tit=`Movimiento ${nm}`;const m=movMapa[x.id];
+      sub=combate.mapa?(m?`${m.coste} pies hasta ${m.destino.join(",")}`:(x.id===tramo()?"Marca el destino en el mapa":"Toca para marcarlo en el mapa")):(x.pies>0?`${x.pies} pies`:"Indica los pies")}
+    return `<li class="paso ${x.tipo==="mover"&&x.id===tramo()&&combate.mapa?"activo":""}" data-id="${x.id}"><span class="asa" aria-label="Arrastrar para ordenar" title="Arrastrar para ordenar">⋮⋮</span>
+      <button type="button" class="paso-tit">${tit}<small>${esc(sub)}</small></button><button type="button" class="sec quitar" aria-label="Quitar">✕</button><div class="paso-cfg"></div></li>`}).join("")
+    ||`<li class="estado">Sin pasos todavía. Agrégalos con «+» y ordénalos arrastrando ⋮⋮.</li>`;
+  $("pasos").querySelectorAll(".paso").forEach(li=>{
+    const x=pasos.find(p=>p.id===li.dataset.id),cfg=li.querySelector(".paso-cfg");
+    if(x.tipo==="accion")cfg.append($("cfgAccion"));
+    if(x.tipo==="adicional")cfg.append($("cfgAdicional"));
+    if(x.tipo==="mover"&&!combate.mapa){
+      const otros=combate.combatientes.filter(c=>c.activo&&!c.es_pj).map(c=>c.id);
+      cfg.innerHTML=`<div class="fila"><label>Pies<input type="number" min="0" step="5" inputmode="numeric" data-pk="pies" value="${x.pies||0}"></label>
+        <label>Hacia dónde<select data-pk="dir">${[["hacia","acercarme a"],["lejos de","alejarme de"],["","otro"]].map(([v,t])=>`<option value="${v}" ${x.dir===v?"selected":""}>${t}</option>`).join("")}</select></label></div>
+        <label>Respecto de<select data-pk="ref">${otros.map(o=>`<option ${x.ref===o?"selected":""}>${esc(o)}</option>`).join("")}</select></label>`;
+      if(!x.ref)x.ref=otros[0];if(x.dir===undefined)x.dir="hacia"}
+    li.querySelector(".paso-tit").onclick=()=>{
+      if(x.tipo==="accion")abrirLista($("selAccion"),"Acción");
+      else if(x.tipo==="adicional")abrirLista($("selAdicional"),"Acción adicional");
+      else if(combate.mapa){pasoMapa=x.id;pintarMapa();pintarPasos();$("panelMapa").scrollIntoView({behavior:"smooth",block:"center"})}};
+    li.querySelector(".quitar").onclick=()=>{pasos=pasos.filter(p=>p!==x);
+      if(x.tipo==="accion")form.accion="";if(x.tipo==="adicional")form.adicional="";
+      delete movMapa[x.id];sanearTramos();pintarCombate(combate)};
+    arrastrable(li);
+  });
+}
+$("pasos").addEventListener("input",e=>{const k=e.target.dataset.pk;if(!k)return;const x=pasos.find(p=>p.id===e.target.closest(".paso").dataset.id);
+  x[k]=k==="pies"?Math.max(0,Number(e.target.value)||0):e.target.value;revisar();if(k==="pies")$("pasos").querySelector(`[data-id="${x.id}"] small`).textContent=`${x.pies} pies`});
+$("pasos").addEventListener("change",e=>{if(e.target.dataset.pk&&e.target.tagName==="SELECT")e.target.dispatchEvent(new Event("input",{bubbles:true}))});
+$("agregarPaso").onclick=()=>{
+  const s=combate.shalock,eco=s.economia||{},tuyo=combate.turno==="Shalock";
+  const hayAc=idxDe("accion")>=0||(eco.accion&&tuyo),hayAd=idxDe("adicional")>=0||(eco.adicional&&tuyo);
+  abrirHoja("Agregar al turno",[{t:hayAc?"Acción (ya está)":"Acción",v:"accion",no:hayAc},{t:hayAd?"Acción adicional (ya está)":"Acción adicional",v:"adicional",no:hayAd},{t:"Movimiento",v:"mover"}],tipo=>{
+    const x={id:"p"+(++nPaso),tipo};pasos.push(x);
+    if(tipo==="mover")pasoMapa=x.id;
+    pintarCombate(combate);
+    if(tipo==="accion")abrirLista($("selAccion"),"Acción");
+    if(tipo==="adicional")abrirLista($("selAdicional"),"Acción adicional");
+    if(tipo==="mover"&&combate.mapa)$("panelMapa").scrollIntoView({behavior:"smooth",block:"center"});
+  });
+};
+// Arrastrar ⋮⋮ para cambiar el orden (dedo o mouse).
+function arrastrable(li){
+  const asa=li.querySelector(".asa");
+  asa.addEventListener("pointerdown",e=>{
+    e.preventDefault();try{asa.setPointerCapture(e.pointerId)}catch(_){}li.classList.add("arrastrando");
+    const mover=ev=>{const filas=[...$("pasos").querySelectorAll(".paso")].filter(f=>f!==li);
+      const antes=filas.find(f=>{const r=f.getBoundingClientRect();return ev.clientY<r.top+r.height/2});
+      if(antes){if(antes.previousElementSibling!==li)$("pasos").insertBefore(li,antes)}else if($("pasos").lastElementChild!==li)$("pasos").appendChild(li)};
+    const soltar=()=>{asa.removeEventListener("pointermove",mover);asa.removeEventListener("pointerup",soltar);asa.removeEventListener("pointercancel",soltar);
+      li.classList.remove("arrastrando");
+      const orden=[...$("pasos").querySelectorAll(".paso")].map(f=>f.dataset.id);
+      pasos.sort((a,b)=>orden.indexOf(a.id)-orden.indexOf(b.id));
+      sanearTramos();pintarCombate(combate)};
+    asa.addEventListener("pointermove",mover);asa.addEventListener("pointerup",soltar);asa.addEventListener("pointercancel",soltar);
+  });
+}
+function origenAtaque(){const a=pasos.find(x=>x.tipo==="accion");return a?posAntesDe(a.id):yoPos()}
 function distanciaAlAtacar(obj){
   if(combate.mapa){const c=combate.combatientes.find(x=>x.id===obj),o=origenAtaque();return c&&c.pos&&o?5*distHex(o,c.pos):null}
   const c=combate.combatientes.find(x=>x.id===obj); if(!c||c.distancia==null)return null;
-  const pies=Math.max(0,Number($("movPies").value)||0), antes=$("movMomento").value==="antes", ref=$("movRef").value, dir=$("movDir").value;
-  if(!antes||!pies||ref!==obj)return c.distancia;
-  return dir==="hacia"?Math.max(5,c.distancia-pies):dir==="lejos de"?c.distancia+pies:c.distancia;
+  let d=c.distancia;const b=idxDe("accion");
+  pasos.forEach((x,i)=>{if(x.tipo!=="mover"||(b>=0&&i>b)||x.ref!==obj||!(x.pies>0))return;
+    d=x.dir==="hacia"?Math.max(5,d-x.pies):x.dir==="lejos de"?d+x.pies:d});
+  return d;
 }
 // Ataque a distancia con un enemigo junto a ti: desventaja (si ese enemigo puede verte).
 function enemigoJunto(){
@@ -569,15 +673,12 @@ function enemigoJunto(){
 function movimientoElegido(){
   const s=combate.shalock, mv=[];
   if($("levantar").checked&&!$("lblLevantar").hidden)mv.push({tipo:"levantarse"});
-  if(combate.mapa){
-    ["antes","despues"].forEach(t=>{const m=movMapa[t];if(m)mv.push({tipo:"mover",destino:m.destino,pies:m.coste,momento:t})});
-    const pies=costeTramos();
-    return{mv,pies,coste:pies+(mv.some(m=>m.tipo==="levantarse")?Math.floor(s.velocidad/2):0)};
-  }
-  const pies=Math.max(0,Number($("movPies").value)||0);
-  if(pies>0)mv.push({tipo:"mover",pies,direccion:$("movDir").value,respecto:$("movRef").value,momento:$("movMomento").value});
-  const coste=pies+(mv.some(m=>m.tipo==="levantarse")?Math.floor(s.velocidad/2):0);
-  return{mv,pies,coste};
+  // Un movimiento por paso, en el orden de la lista; «paso» indica su lugar en la secuencia.
+  let pies=0;
+  movers().forEach(x=>{
+    if(combate.mapa){const m=movMapa[x.id];if(m){mv.push({tipo:"mover",destino:m.destino,pies:m.coste,momento:momentoDe(x.id),paso:x.id});pies+=m.coste}}
+    else if(x.pies>0){mv.push({tipo:"mover",pies:x.pies,direccion:x.dir||"",respecto:x.ref||"",momento:momentoDe(x.id),paso:x.id});pies+=x.pies}});
+  return{mv,pies,coste:pies+(mv.some(m=>m.tipo==="levantarse")?Math.floor(s.velocidad/2):0)};
 }
 
 // Reglas que la app revisa antes de enviar.
@@ -607,12 +708,15 @@ function revisar(){
   if(combate.mapa&&form.accion!=="com:Desenganchar"){
     // Salir del alcance de un enemigo en pie provoca su ataque de oportunidad (alcance de 5 pies por defecto).
     const ene=combate.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos&&!(c.condiciones||[]).includes("inconsciente"));
-    const ruta=[yoPos(),...[movMapa.antes,movMapa.despues].filter(Boolean).flatMap(m=>m.ruta.slice(1))].filter(Boolean);
+    const ruta=[yoPos(),...movers().filter(x=>movMapa[x.id]).flatMap(x=>movMapa[x.id].ruta.slice(1))].filter(Boolean);
     const provoca=ene.filter(c=>ruta.some((h,i)=>i<ruta.length-1&&distHex(h,c.pos)<=1&&distHex(ruta[i+1],c.pos)>1)).map(c=>c.id);
     if(provoca.length)avisos.push(`Al salir de su alcance provocas el ataque de oportunidad de ${provoca.join(" y ")} (salvo que Desenganches).`);
   }
-  const ref=combate.combatientes.find(c=>c.id===$("movRef").value);
-  if(mov.pies>0&&$("movDir").value==="lejos de"&&ref&&ref.bando==="enemigo"&&form.accion!=="com:Desenganchar")avisos.push(`Si ${ref.id} está junto a ti, alejarte provoca su ataque de oportunidad (salvo que Desenganches).`);
+  if(!combate.mapa)movers().forEach(x=>{const ref=combate.combatientes.find(c=>c.id===x.ref);
+    if(x.pies>0&&x.dir==="lejos de"&&ref&&ref.bando==="enemigo"&&form.accion!=="com:Desenganchar")avisos.push(`Si ${ref.id} está junto a ti, alejarte provoca su ataque de oportunidad (salvo que Desenganches).`)});
+  if(combate.mapa)movers().forEach((x,i)=>{if(!movMapa[x.id])avisos.push(`Movimiento ${i+1}: todavía sin destino en el mapa (no cuenta).`)});
+  const elegida=x=>x.tipo==="accion"?form.accion:x.tipo==="adicional"?form.adicional:"x";
+  pasos.forEach(x=>{if(!elegida(x))bloqueos.push(`${x.tipo==="accion"?"Acción":"Acción adicional"}: elige cuál.`)});
   if(form.accion.startsWith("atq:")){
     const a=ataque(form.accion.slice(4)), obj=form.c.ac_objetivo, dd=distanciaAlAtacar(obj);
     if(dd==null)avisos.push(`No sé a qué distancia está ${obj}: el DM la fija.`);
@@ -623,7 +727,7 @@ function revisar(){
       if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==c.id).map(x=>x.pos));
         if(cob===null)bloqueos.push(`No ves a ${obj}: hay un muro en medio.`);else if(cob)avisos.push(`${obj} tiene cobertura (+${cob} a su CA).`)}}
   }
-  if(!form.accion&&!form.adicional&&!mov.mv.length)bloqueos.push("Elige al menos una acción o un movimiento.");
+  if(!pasos.length&&!mov.mv.length)bloqueos.push("Agrega al menos un paso con «+».");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
   return bloqueos.length===0;
@@ -660,7 +764,8 @@ function describir(p,valor){
 }
 
 function tirarTurno(){
-  const s=combate.shalock, ad=describir("ad",form.adicional), ac=describir("ac",form.accion);
+  const s=combate.shalock, ad=idxDe("adicional")>=0?describir("ad",form.adicional):null, ac=idxDe("accion")>=0?describir("ac",form.accion):null;
+  form.orden=ordenAdicional();
   // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
   let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
   if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio"||ad.id==="mover_maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
@@ -670,7 +775,10 @@ function tirarTurno(){
   }
   if(ac&&ac.id==="escapar"){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
   if(ac&&ac.id==="curar")ac.curacion=tirarExpr(`${ac.nivel||1}d8+4`,false,false);
-  return{tipo:"turno",adicional:ad,accion:ac,movimientos:movimientoElegido().mv,orden:form.orden,notas:form.notas,ts:Date.now()};
+  const mv=movimientoElegido().mv;
+  // Secuencia en el orden de la lista: «mover:i» apunta a movimientos[i].
+  const secuencia=pasos.map(x=>x.tipo==="mover"?(mv.findIndex(m=>m.paso===x.id)>=0?"mover:"+mv.findIndex(m=>m.paso===x.id):null):x.tipo).filter(Boolean);
+  return{tipo:"turno",adicional:ad,accion:ac,movimientos:mv,secuencia,orden:form.orden,notas:form.notas,ts:Date.now()};
 }
 
 // Paso 1: solo el d20. El vigilante del PC devuelve el veredicto sin mostrar la CA.
@@ -758,9 +866,17 @@ function resumen(t){
     :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${parte(Object.assign({tipo:"PG"},x.curacion))}`:""}`
     :x.tipo==="comun"?x.nombre
     :x.tipo==="preparar"?`Preparar ${x.accion} (${x.al_ver?"cuando un enemigo entre en tu vista":`cuando un enemigo llegue a ${x.al_alcance} pies`})`:x.texto;
+  if(t.secuencia){
+    // En el orden en que lo armaste.
+    t.movimientos.filter(m=>m.tipo==="levantarse").forEach(()=>out.push("Se levanta"));
+    t.secuencia.forEach(x=>{if(x==="adicional"&&t.adicional)out.push("Adicional: "+txt(t.adicional));
+      else if(x==="accion"&&t.accion)out.push("Acción: "+txt(t.accion)+(t.accion.tirada?` (${t.accion.habilidad}: ${t.accion.tirada.dados.join("")} ${t.accion.tirada.expresion.replace(/^1d20/,"")} = ${t.accion.tirada.total})`:""));
+      else if(x.startsWith("mover:")){const m=t.movimientos[Number(x.slice(6))];if(m)out.push("Mueve "+(m.destino?`${m.pies} pies hasta ${m.destino.join(",")}`:`${m.pies} pies ${m.direccion} ${m.respecto}`))}});
+    return out.join(" → ");
+  }
   if(t.adicional)out.push("Adicional: "+txt(t.adicional));
   if(t.accion)out.push("Acción: "+txt(t.accion)+(t.accion.tirada?` (${t.accion.habilidad}: ${t.accion.tirada.dados.join("")} ${t.accion.tirada.expresion.replace(/^1d20/,"")} = ${t.accion.tirada.total})`:""));
-  if(t.movimientos&&t.movimientos.length)out.push("Movimiento: "+t.movimientos.map(m=>m.tipo==="levantarse"?"se levanta":m.destino?`${m.pies} pies ${m.momento==="despues"?"después":"antes"} de la acción, hasta ${m.destino.join(",")}`:`${m.pies} pies ${m.direccion} ${m.respecto}`).join(", "));
+  if(t.movimientos&&t.movimientos.length)out.push("Movimiento: "+t.movimientos.map(m=>m.tipo==="levantarse"?"se levanta":m.destino?`${m.pies} pies hasta ${m.destino.join(",")}`:`${m.pies} pies ${m.direccion} ${m.respecto}`).join(", "));
   return out.join(" · ");
 }
 
@@ -773,8 +889,8 @@ $("enviarTurno").addEventListener("click",async()=>{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioTurno.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de Shalock",content:b64(JSON.stringify(t))})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
-    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false});$("notas").value="";$("movPies").value=0;$("levantar").checked=false;movMapa={antes:null,despues:null};
-    $("enviarTurno").textContent="Tirar y enviar turno";$("movMomento").value="antes";
+    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
+    $("enviarTurno").textContent="Tirar y enviar turno";
     est.className="estado ok";est.textContent="Turno enviado al DM.";
     pintarCombate(combate);
   }catch(e){
