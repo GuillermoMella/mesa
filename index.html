@@ -239,7 +239,9 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <label for="notas">Notas<input id="notas" placeholder="Por la izquierda, pegado al muro…"></label>
     <div class="estado" id="avisos"></div>
     <div class="estado" id="resTurno"></div>
-    <button id="enviarTurno">Tirar y enviar turno</button>
+    <div class="estado">«Enviar y seguir» manda lo armado y deja tu turno abierto: ves el resultado y armas lo que falta.</div>
+    <button class="sec" id="enviarParcial">Enviar y seguir</button>
+    <button id="enviarTurno">Enviar y terminar turno</button>
     <div class="estado" id="estadoTurno"></div>
   </section>
 
@@ -402,10 +404,21 @@ const idxDe=tipo=>pasos.findIndex(x=>x.tipo===tipo);
 const ordenAdicional=()=>{const a=idxDe("adicional"),b=idxDe("accion");return a<0||b<0||a<b?"antes":"despues"};
 function momentoDe(id){const i=pasos.findIndex(x=>x.id===id),b=idxDe("accion");return b<0||i<b?"antes":"despues"}
 const yoPos=()=>{const y=combate.combatientes.find(c=>c.es_pj);return y&&y.pos};
-function quedanPies(excluir){const s=combate.shalock,eco=s.economia||{},vel=s.velocidad||30;
-  if((s.condiciones||[]).includes("agarrado"))return 0;
-  const correr=eco.correr||(form.accion==="com:Correr"&&idxDe("accion")>=0),lev=$("levantar").checked&&!$("lblLevantar").hidden?Math.floor(vel/2):0;
-  return vel*(correr?2:1)-(eco.movimiento||0)-lev-costeTramos(excluir)}
+// Movimiento: la velocidad actual la calcula el motor (modificadores, cansancio, condiciones) y llega en
+// s.velocidad; aquí solo se recorre la lista: Correr suma esa velocidad en su paso, cada tramo resta su coste.
+const costeDe=x=>combate.mapa?(movMapa[x.id]?movMapa[x.id].coste:0):(x.pies||0);
+const levantaPlan=()=>$("levantar").checked&&!$("lblLevantar").hidden;
+function presupuesto(hastaId){
+  const s=combate.shalock,eco=s.economia||{},vel=s.velocidad||0;
+  let b=vel+(eco.extra||0)-(eco.movimiento||0)-(levantaPlan()?Math.floor(vel/2):0);
+  for(const x of pasos){if(x.id===hastaId)break;
+    if(x.tipo==="accion"&&!x.extra&&form.accion==="com:Correr")b+=vel;
+    if(x.tipo==="mover")b-=costeDe(x)}
+  return b}
+// Lo que puede usar un tramo: lo disponible al llegar a él, sin dejar sin pies a los tramos siguientes.
+function quedanPies(excluir){
+  if(!excluir)return presupuesto(null);
+  const x=pasos.find(p=>p.id===excluir);return Math.max(0,Math.min(presupuesto(excluir),presupuesto(null)+(x?costeDe(x):0)))}
 // Zoom (botones o pellizco), deslizar (dedo o arrastre con el mouse) y centrar en tu ficha.
 let zoomMapa=1,geoMapa=null,mapaCentrado=false,turnoPrevio=null;
 try{zoomMapa=Number(localStorage.getItem("mesa_zoom"))||1}catch(e){}
@@ -526,10 +539,12 @@ function pintarCombate(cb){
   $("selAdicional").disabled=!!(eco.adicional&&tuyo2); if($("selAdicional").disabled){form.adicional="";$("selAdicional").value=""}
   const ac=[`<option value="">Elegir…</option>`,...s.acciones.map(a=>`<option value="atq:${a.id}">Atacar: ${esc(a.nombre)}</option>`),...s.opciones.filter(o=>o.tiempo==="accion").map(o=>`<option value="op:${o.id}">${esc(o.nombre)}</option>`),...s.comunes.map(x=>`<option value="com:${esc(x)}">${esc(x)}</option>`),`<option value="otra">Otra (escribirla)</option>`];
   $("selAccion").innerHTML=ac.join(""); $("selAccion").value=form.accion;
-  $("selAccion").disabled=!!(eco.accion&&tuyo2); if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
+  const soloAtaque=!!(eco.accion&&tuyo2&&eco.ataques_restantes>0);
+  if(soloAtaque){$("selAccion").innerHTML=ac.filter(o=>o.includes('value="atq:')||o.includes('value=""')).join("");$("selAccion").value=form.accion}
+  $("selAccion").disabled=!!(eco.accion&&tuyo2)&&!soloAtaque; if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
   $("cfgAdicional").innerHTML=campos("ad",form.adicional); $("cfgAccion").innerHTML=campos("ac",form.accion);
   $("lblLevantar").hidden=!(s.condiciones||[]).includes("derribado");
-  if(eco.accion&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="accion");
+  if(eco.accion&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="accion"||(x.extra&&eco.ataques_restantes>0));
   if(eco.adicional&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="adicional");
   pintarPasos();
   if(!form.acManual&&form.c.ad_objetivo&&enemigos().includes(form.c.ad_objetivo))form.c.ac_objetivo=form.c.ad_objetivo;
@@ -599,7 +614,7 @@ function pintarPasos(){
   let nm=0;
   $("pasos").innerHTML=pasos.map(x=>{
     let tit,sub="";
-    if(x.tipo==="accion"){tit="Acción";sub=nombreDe("selAccion")||"Toca para elegir"}
+    if(x.tipo==="accion"){tit=x.extra?"Otro ataque":"Acción";sub=nombreDe("selAccion")||"Toca para elegir"}
     else if(x.tipo==="adicional"){tit="Acción adicional";sub=nombreDe("selAdicional")||"Toca para elegir"}
     else{nm++;tit=`Movimiento ${nm}`;const m=movMapa[x.id];
       sub=combate.mapa?(m?`${m.coste} pies hasta ${m.destino.join(",")}`:(x.id===tramo()?"Marca el destino en el mapa":"Toca para marcarlo en el mapa")):(x.pies>0?`${x.pies} pies`:"Indica los pies")}
@@ -631,9 +646,10 @@ $("pasos").addEventListener("input",e=>{const k=e.target.dataset.pk;if(!k)return
 $("pasos").addEventListener("change",e=>{if(e.target.dataset.pk&&e.target.tagName==="SELECT")e.target.dispatchEvent(new Event("input",{bubbles:true}))});
 $("agregarPaso").onclick=()=>{
   const s=combate.shalock,eco=s.economia||{},tuyo=combate.turno==="Shalock";
-  const hayAc=idxDe("accion")>=0||(eco.accion&&tuyo),hayAd=idxDe("adicional")>=0||(eco.adicional&&tuyo);
-  abrirHoja("Agregar al turno",[{t:hayAc?"Acción (ya está)":"Acción",v:"accion",no:hayAc},{t:hayAd?"Acción adicional (ya está)":"Acción adicional",v:"adicional",no:hayAd},{t:"Movimiento",v:"mover"}],tipo=>{
-    const x={id:"p"+(++nPaso),tipo};pasos.push(x);
+  const extra=eco.accion&&tuyo&&eco.ataques_restantes>0;
+  const hayAc=idxDe("accion")>=0||(eco.accion&&tuyo&&!extra),hayAd=idxDe("adicional")>=0||(eco.adicional&&tuyo);
+  abrirHoja("Agregar al turno",[{t:extra?`Otro ataque (te quedan ${eco.ataques_restantes})`:hayAc?"Acción (ya está)":"Acción",v:"accion",no:hayAc},{t:hayAd?"Acción adicional (ya está)":"Acción adicional",v:"adicional",no:hayAd},{t:"Movimiento",v:"mover"}],tipo=>{
+    const x={id:"p"+(++nPaso),tipo};if(tipo==="accion"&&extra)x.extra=true;pasos.push(x);
     if(tipo==="mover")pasoMapa=x.id;
     pintarCombate(combate);
     if(tipo==="accion")abrirLista($("selAccion"),"Acción");
@@ -700,10 +716,14 @@ function revisar(){
   if(ac&&ac.id==="imposicion"&&!(Number(form.c.ac_puntos)>0&&Number(form.c.ac_puntos)<=s.recursos.imposicion))bloqueos.push("Indica cuántos puntos de la reserva usas.");
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
   if(combate.turno!=="Shalock")bloqueos.push("Espera tu turno: puedes dejarlo armado.");
-  const eco=s.economia||{}, correr=eco.correr||form.accion==="com:Correr", vel=s.velocidad||30;
-  const agarrado=(s.condiciones||[]).includes("agarrado"), maximo=agarrado?0:vel*(correr?2:1), usados=eco.movimiento||0, mov=movimientoElegido();
-  $("velInfo").textContent=agarrado?"Estás agarrado: tu velocidad es 0.":`Velocidad ${vel} pies${correr?" (+"+vel+" por Correr)":""} · usados ${usados} · quedan ${Math.max(0,maximo-usados)}`;
-  if(mov.coste>maximo-usados)bloqueos.push(agarrado?"Agarrado: no puedes moverte (prueba con Escapar de un agarre).":`Movimiento: te quedan ${Math.max(0,maximo-usados)} pies y quieres gastar ${mov.coste}.`);
+  const eco=s.economia||{}, vel=s.velocidad||0, usados=eco.movimiento||0, mov=movimientoElegido();
+  const traba=["agarrado","apresado","aturdido","inconsciente","paralizado","petrificado"].filter(x=>(s.condiciones||[]).includes(x));
+  $("velInfo").textContent=vel===0?`Tu velocidad actual es 0${traba.length?` (${traba.join(", ")})`:""}.`
+    :`Velocidad actual ${vel} pies${eco.extra?` · +${eco.extra} por Correr`:""} · usados ${usados} · te quedan ${Math.max(0,presupuesto(null))} con lo armado`;
+  // Recorre los pasos en orden: un tramo no puede usar pies que todavía no tienes (por ejemplo, antes de Correr).
+  let nm=0;pasos.forEach(x=>{if(x.tipo!=="mover")return;nm++;const c=costeDe(x),b=presupuesto(x.id);
+    if(c>b)bloqueos.push(vel===0?`Movimiento ${nm}: tu velocidad es 0.`:`Movimiento ${nm}: en ese punto te quedan ${Math.max(0,b)} pies y quieres gastar ${c}.`)});
+  if(levantaPlan()&&vel===0)bloqueos.push("No puedes levantarte con velocidad 0.");
   if(mov.pies%5)avisos.push("El movimiento se cuenta de a 5 pies.");
   if(combate.mapa&&form.accion!=="com:Desenganchar"){
     // Salir del alcance de un enemigo en pie provoca su ataque de oportunidad (alcance de 5 pies por defecto).
@@ -727,9 +747,10 @@ function revisar(){
       if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==c.id).map(x=>x.pos));
         if(cob===null)bloqueos.push(`No ves a ${obj}: hay un muro en medio.`);else if(cob)avisos.push(`${obj} tiene cobertura (+${cob} a su CA).`)}}
   }
-  if(!pasos.length&&!mov.mv.length)bloqueos.push("Agrega al menos un paso con «+».");
+  if(!pasos.length&&!mov.mv.length&&!s.turno_abierto)bloqueos.push("Agrega al menos un paso con «+».");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
+  $("enviarParcial").disabled=bloqueos.length>0||!pasos.length;
   return bloqueos.length===0;
 }
 
@@ -766,6 +787,7 @@ function describir(p,valor){
 function tirarTurno(){
   const s=combate.shalock, ad=idxDe("adicional")>=0?describir("ad",form.adicional):null, ac=idxDe("accion")>=0?describir("ac",form.accion):null;
   form.orden=ordenAdicional();
+  if(ac&&pasos.some(x=>x.tipo==="accion"&&x.extra))ac.extra=true;
   // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
   let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
   if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio"||ad.id==="mover_maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
@@ -880,8 +902,8 @@ function resumen(t){
   return out.join(" · ");
 }
 
-$("enviarTurno").addEventListener("click",async()=>{
-  if(!envioTurno){if(!revisar())return;const ts=Date.now();envioTurno={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:tirarTurno()}}
+async function enviarTurno(parcial){
+  if(!envioTurno){if(!revisar())return;const ts=Date.now();envioTurno={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:Object.assign(tirarTurno(),{parcial})}}
   const t=envioTurno.t, est=$("estadoTurno");
   $("resTurno").textContent=resumen(t);
   est.className="estado";est.textContent="Enviando…";$("enviarTurno").disabled=true;
@@ -890,14 +912,16 @@ $("enviarTurno").addEventListener("click",async()=>{
     if(!r.ok)throw new Error("HTTP "+r.status);
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
     envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
-    $("enviarTurno").textContent="Tirar y enviar turno";
-    est.className="estado ok";est.textContent="Turno enviado al DM.";
+    $("enviarTurno").textContent="Enviar y terminar turno";
+    est.className="estado ok";est.textContent=t.parcial?"Parte enviada: tu turno sigue abierto.":"Turno enviado al DM.";
     pintarCombate(combate);
   }catch(e){
     $("enviarTurno").textContent="Reenviar el mismo turno";$("enviarTurno").disabled=false;
     est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo resultado.`;
   }
-});
+}
+$("enviarTurno").addEventListener("click",()=>enviarTurno(envioTurno?envioTurno.t.parcial:false));
+$("enviarParcial").addEventListener("click",()=>enviarTurno(envioTurno?envioTurno.t.parcial:true));
 
 async function sondear(){
   if(!cfg.repo||!cfg.token)return;
