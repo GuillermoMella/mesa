@@ -58,6 +58,9 @@ input[type=checkbox],input[type=radio]{min-height:0;width:22px;height:22px;accen
 .orden span.fuera{opacity:.4;text-decoration:line-through}
 .orden span.enemigo{border-style:dashed}
 .economia{display:flex;gap:6px;flex-wrap:wrap}
+.registro{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;font-size:.92rem}
+.registro .r{color:var(--muted);font-family:var(--mono);font-size:.75rem}
+#panelRegistro summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 .economia span{font-size:.85rem;border-radius:6px;padding:4px 10px;border:1px solid var(--ok);color:var(--ok)}
 .economia span.usada{border-color:var(--line);color:var(--muted);text-decoration:line-through}
 .pips .vacio{color:var(--line)}
@@ -125,6 +128,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="turno" id="turno"></div>
     <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
     <div class="lista" id="combatientes"></div>
+    <details id="panelRegistro"><summary class="eyebrow">Lo que pasó</summary><ol class="registro" id="registro"></ol></details>
   </section>
 
   <section class="panel" id="panelShalock" hidden>
@@ -234,6 +238,7 @@ function pintarCombate(cb){
   $("orden").innerHTML=cb.combatientes.filter(c=>c.iniciativa!=null).map(c=>`<span class="${c.id===cb.turno?"actual":""} ${c.activo?"":"fuera"} ${c.bando==="enemigo"?"enemigo":""}">${esc(c.id)}</span>`).join("");
   // Centra el turno actual en la franja sin mover la página.
   const actual=document.querySelector("#orden .actual"); if(actual)$("orden").scrollLeft=actual.offsetLeft-$("orden").offsetLeft-$("orden").clientWidth/2+actual.offsetWidth/2;
+  $("registro").innerHTML=(cb.registro||[]).slice().reverse().map(r=>`<li><span class="r">R${r.ronda}</span> <b>${esc(r.quien)}</b> ${esc(r.texto)}</li>`).join("")||"<li>Todavía nada.</li>";
   const cuad=cb.combatientes.filter(c=>c.bando==="cuadrilla"), ene=cb.combatientes.filter(c=>c.bando==="enemigo");
   $("combatientes").innerHTML=`<div class="grupo"><div class="eyebrow">Enemigos</div>${ene.map(tarjeta).join("")}</div><div class="grupo"><div class="eyebrow">Cuadrilla</div>${cuad.map(tarjeta).join("")}</div>`;
   // En combate, lo del combate va arriba y la tirada pedida solo si hay una.
