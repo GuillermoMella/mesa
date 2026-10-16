@@ -314,6 +314,58 @@ $("enviarTurno").addEventListener("click",async()=>{
   }
 });
 
+async function sondear(){
+  if(!cfg.repo||!cfg.token)return;
+  try{
+    const h=cabeceras(etag?{"If-None-Match":etag}:{});
+    const r=await fetch(`${API}/repos/${cfg.repo}/contents/estado.json`,{headers:h,cache:"no-store"});
+    if(r.status===304){$("conexion").textContent="Conectado";return}
+    if(r.status===401||r.status===403){$("conexion").textContent="El token no sirve o venció";return}
+    if(r.status===404){$("conexion").textContent="Conectado; el DM aún no publica la mesa";$("mensaje").textContent="Esperando al DM…";return}
+    if(!r.ok){$("conexion").textContent="Error "+r.status;return}
+    etag=r.headers.get("ETag");
+    const j=await r.json();
+    pintar(JSON.parse(deB64(j.content)));
+    $("conexion").textContent="Conectado";
+  }catch(e){$("conexion").textContent="Sin conexión"}
+}
+
+function arrancar(){
+  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;
+  if(!cfg.repo||!cfg.token){$("ajustes").hidden=false;$("mensaje").textContent="Falta la conexión: pon el repositorio y el token.";return}
+  if(sondeo)clearInterval(sondeo);etag=null;sondear();sondeo=setInterval(sondear,2000);
+}
+
+$("abrirAjustes").addEventListener("click",()=>{$("ajustes").hidden=!$("ajustes").hidden});
+$("guardar").addEventListener("click",()=>{cfg.repo=$("repo").value.trim();cfg.token=$("token").value.trim();guardarCfg();$("ajustes").hidden=true;arrancar()});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)sondear()});
+
+$("tirar").addEventListener("click",async()=>{
+  if(!pedido)return;
+  $("tirar").disabled=true;
+  // Si un envío falló, se reenvía la misma tirada: nunca se vuelve a tirar.
+  if(!pendiente||pendiente.tirada.pedido!==pedido.id){
+    const m=/^(\d*)d(\d+)$/i.exec(pedido.expresion||"1d20")||[0,"1","20"];
+    const n=Number(m[1]||1),caras=Number(m[2]),mod=Number(pedido.mod)||0;
+    const dados=Array.from({length:n},()=>d(caras)),ts=Date.now();
+    pendiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,tirada:{pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion||"1d20",dados,mod,total:dados.reduce((a,b)=>a+b,0)+mod,ts}};
+    const el=$("dado");el.classList.remove("rueda");void el.offsetWidth;el.classList.add("rueda");
+  }
+  const {id,tirada}=pendiente,{dados,mod,total}=tirada;
+  $("dado").textContent=dados.join(" · ");$("total").textContent="total "+total;$("resultado").hidden=false;
+  const est=$("estado");est.className="estado";est.textContent="Enviando…";
+  try{
+    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"tirada "+(pedido.nombre||""),content:b64(JSON.stringify(tirada))})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    marcarEnviado(pedido.id);pendiente=null;
+    est.className="estado ok";est.textContent=`Enviada: ${dados.join(", ")} ${fmtMod(mod)} → ${total}`;
+  }catch(e){
+    $("tirar").disabled=false;$("tirar").textContent="Reenviar la misma tirada";
+    est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Revisa la conexión y aprieta de nuevo, o escríbele el total al DM.`;
+  }
+});
+
+
 arrancar();
 </script>
 </body>
