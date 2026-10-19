@@ -125,6 +125,9 @@ select.oculto{display:none}
 .borde{stroke:#d9c7a3;stroke-linecap:round;pointer-events:none}
 .borde.b2{stroke-width:3;stroke-dasharray:5 3} .borde.b5{stroke-width:5}
 .borde.dif{stroke:#e3b341}
+.muro-b{stroke:#8a96a8;stroke-width:6;stroke-linecap:round;pointer-events:none}
+.puerta{stroke:#b07a3c;stroke-width:6;stroke-linecap:butt;pointer-events:none}
+.puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
 .sim{font-size:9px;text-anchor:middle;pointer-events:none;opacity:.75}
 .sim.luz{fill:var(--warn)} .sim.tenue{fill:var(--muted)} .sim.osc{fill:#c9d1d9;opacity:.45} .sim.magica{fill:#b9a8ff;opacity:.9}
 .leyenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.8rem;color:var(--muted);margin-top:6px}
@@ -452,7 +455,7 @@ function alcanzablesHex(f,ini,max,hostiles,aliados){
   const H=new Set(hostiles.map(k)),A=new Set(aliados.map(k)),coste={[k(ini)]:0},prev={};let cola=[[0,ini]];
   const Z=new Set(((combate&&combate.mapa&&combate.mapa.zonas)||[]).filter(z=>z.dificil).flatMap(z=>z.hexes.map(k))), B=bordesIdx();
   while(cola.length){cola.sort((a,b)=>a[0]-b[0]);const[c,act]=cola.shift();if(c>coste[k(act)])continue;
-    for(const s of vecinosHex(act)){if(!transitableHex(f,s)||H.has(k(s)))continue;const n=c+((HX.dificil.includes(celdaHex(f,s))||Z.has(k(s))||(B[claveBorde(act,s)]||{}).paso==="dificil")?10:5);
+    for(const s of vecinosHex(act)){if(!transitableHex(f,s)||H.has(k(s)))continue;const bb=B[claveBorde(act,s)];if(bb&&bb.paso==="bloquea"&&!bb.abierta)continue;const n=c+((HX.dificil.includes(celdaHex(f,s))||Z.has(k(s))||(B[claveBorde(act,s)]||{}).paso==="dificil")?10:5);
       if(n<=max&&n<(coste[k(s)]??1e9)){coste[k(s)]=n;prev[k(s)]=act;cola.push([n,s])}}}
   A.forEach(a=>delete coste[a]);return{coste,prev};
 }
@@ -467,7 +470,9 @@ function coberturaHex(f,a,b,ocupadas=[]){const n=distHex(a,b),A=aCubo(a),B=aCubo
   let mejor=cs.includes("O")?5:(cs.includes("o")||tapa)?2:0;
   // Bordes que cruza la línea, salvo el pegado al atacante (su propio parapeto).
   const BI=bordesIdx(),seq=[k(a),...hs,k(b)];
-  for(let i=1;i<seq.length-1;i++){const x=BI[[seq[i],seq[i+1]].sort().join("|")];if(x)mejor=Math.max(mejor,x.cobertura)}
+  for(let i=0;i<seq.length-1;i++){const x=BI[[seq[i],seq[i+1]].sort().join("|")];if(!x||x.abierta)continue;
+    if(x.cobertura==="total")return null;      // muro o puerta cerrada
+    if(i>0)mejor=Math.max(mejor,x.cobertura)}  // el primero es el parapeto del atacante
   return mejor}
 // ---- Pasos del turno ----
 // El turno es una lista ordenada: acción, acción adicional y los movimientos que quieras, en cualquier orden
@@ -575,7 +580,13 @@ function pintarMapa(){
     if(n!=="brillante"||lit[k(h)]){presentes.add(n);svg+=`<text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim ${SIM[n][1]}">${SIM[n][0]}</text>`}}));
   (m.bordes||[]).forEach(b=>{const A=pts(b.entre[0]).split(" "),Bp=pts(b.entre[1]).split(" ").map(p=>p.split(",").map(Number));
     const comunes=A.map(p=>p.split(",").map(Number)).filter(p=>Bp.some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<0.6));
-    if(comunes.length===2)svg+=`<line x1="${comunes[0][0]}" y1="${comunes[0][1]}" x2="${comunes[1][0]}" y2="${comunes[1][1]}" class="borde b${b.cobertura} ${b.paso==="dificil"?"dif":""}"><title>${b.cobertura===5?"tres cuartos":"cobertura media"}${b.paso==="dificil"?", cruzarlo cuesta doble":""}</title></line>`});
+    if(comunes.length!==2)return;
+    const [p1,p2]=comunes,ln=(cls,t)=>`<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" class="${cls}"><title>${t}</title></line>`;
+    if(b.puerta){
+      // Puerta: un hueco en la pared; cerrada, con la hoja puesta.
+      svg+=b.abierta?ln("puerta abierta","puerta abierta"):ln("puerta","puerta cerrada")}
+    else if(b.cobertura==="total")svg+=ln("muro-b","muro");
+    else svg+=ln(`borde b${b.cobertura} ${b.paso==="dificil"?"dif":""}`,`${b.cobertura===5?"tres cuartos":"cobertura media"}${b.paso==="dificil"?", cruzarlo cuesta doble":""}`)});
   (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{
     if(z.oscuridad)svg+=`<polygon points="${pts(h)}" class="zona-osc"/><polygon points="${pts(h)}" class="zona-osc-raya"><title>${esc(z.nombre)}</title></polygon><text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim magica">✦</text>`;
     else svg+=`<polygon points="${pts(h)}" class="zona-dif"><title>${esc(z.nombre)}</title></polygon>`}));
@@ -600,9 +611,11 @@ function pintarMapa(){
   if(tiene("o"))L.push(`<span>${cuadro("var(--hex-cob)","△")}obstáculo grande bajo: se cruza como difícil; +2 detrás</span>`);
   if(tiene("O"))L.push(`<span>${cuadro("var(--hex-cob)","▲")}obstáculo grande alto: no se pasa; +5 detrás</span>`);
   const bs=m.bordes||[];
-  if(bs.some(b=>b.cobertura===2))L.push(`<span><i style="border:0;background:none;color:#d9c7a3">╌</i>borde: cobertura media (+2) cruzándolo</span>`);
+  if(bs.some(b=>b.cobertura===2&&!b.puerta))L.push(`<span><i style="border:0;background:none;color:#d9c7a3">╌</i>borde: cobertura media (+2) cruzándolo</span>`);
   if(bs.some(b=>b.cobertura===5))L.push(`<span><i style="border:0;background:none;color:#d9c7a3">━</i>borde: tres cuartos (+5)</span>`);
   if(bs.some(b=>b.paso==="dificil"))L.push(`<span><i style="border:0;background:none;color:#e3b341">━</i>borde que cuesta doble cruzar</span>`);
+  if(bs.some(b=>b.cobertura==="total"&&!b.puerta))L.push(`<span><i style="border:0;background:none;color:#8a96a8">┃</i>pared (no se pasa ni se ve)</span>`);
+  if(bs.some(b=>b.puerta))L.push(`<span><i style="border:0;background:none;color:#b07a3c">▬</i>puerta (cerrada: como pared; punteada: abierta)</span>`);
   if(tiene("#"))L.push(`<span>${cuadro("var(--hex-muro)")}muro (no se pasa ni se ve)</span>`);
   if((m.zonas||[]).some(z=>z.dificil))L.push(`<span>${cuadro("rgba(227,179,65,.3)")}terreno difícil de un conjuro</span>`);
   if(presentes.has("brillante"))L.push(`<span><i style="color:var(--warn)">☀</i>luz</span>`);
