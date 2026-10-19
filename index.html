@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Mesa de Shalock</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Alegreya+Sans:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Cormorant+SC:wght@500;700&family=Cormorant+Garamond:wght@500;600&family=Caveat:wght@500;700&family=Kalam:wght@400;700&family=Patrick+Hand&family=IM+Fell+English&family=Alegreya+Sans:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
 /* Mesa de Shalock: arriba lo inmediato (turno, tirada, reacción, daño); debajo, pestañas. Tema oscuro frío. */
 :root{
@@ -133,6 +133,79 @@ select.oculto{display:none}
 .puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
 #mapaPiso{overflow:auto;max-height:62vh;border:1px solid var(--borde,#2a3240);border-radius:10px;background:#05070a;touch-action:pan-x pan-y}
 .hxp{stroke:#0b0e13;stroke-width:1;cursor:pointer}.hxp.rec{stroke:#c9d4e3;stroke-width:1.4;stroke-opacity:.5}.hxp.sel{stroke:var(--acento,#8b7cf6);stroke-width:3}
+
+/* ---- Hoja de personaje: papel impreso, valores escritos a mano ---- */
+.hoja-pj{position:fixed;inset:0;z-index:60;overflow:auto;background:rgba(5,6,9,.96);padding:0 10px 40px}
+.hp-barra{position:sticky;top:0;z-index:2;background:rgba(5,6,9,.96);padding:10px 0}
+.hoja-pj[hidden]{display:none}
+.hp{--papel:#f2e8d0;--papel2:#e7d9b8;--tinta:#2a2016;--tenue:#6b5b45;--linea:#bda983;--acento:#8b1e2d;--mano:"Caveat",cursive;
+  --imprenta:"Cormorant SC",Georgia,serif;max-width:1180px;margin:0 auto;color:var(--tinta);border-radius:6px;
+  background:radial-gradient(ellipse at 20% 0%,rgba(255,255,255,.35),transparent 55%),radial-gradient(ellipse at 90% 100%,rgba(120,80,30,.16),transparent 60%),
+  repeating-linear-gradient(0deg,rgba(80,60,30,.025) 0 2px,transparent 2px 4px),linear-gradient(var(--papel),var(--papel2));
+  box-shadow:0 14px 50px rgba(0,0,0,.55),inset 0 0 70px rgba(90,60,20,.22);padding:18px 18px 26px;font-family:var(--imprenta)}
+.hp.noche{--papel:#1d1c24;--papel2:#15141b;--tinta:#ece2c8;--tenue:#a99a7c;--linea:#4a4357}
+.hp.pizarra{--papel:#e8ecef;--papel2:#d6dde2;--tinta:#18232e;--tenue:#56677a;--linea:#9fb0bf}
+.hp .mano{font-family:var(--mano);font-weight:700;color:var(--tinta);letter-spacing:.01em}
+.hp-barra{display:flex;gap:8px;align-items:center;justify-content:flex-end;max-width:1180px;margin:0 auto 10px}
+.hp-barra .eyebrow{margin-right:auto;color:#e6edf3}
+.hp-estilo{max-width:1180px;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:10px;background:#161b22;border:1px solid #2b3340;border-radius:8px;padding:10px}
+.hp-estilo label{flex:1 1 160px;color:#e6edf3}
+.hp-cab{display:grid;grid-template-columns:1fr auto;gap:6px 16px;border-bottom:2px solid var(--linea);padding-bottom:10px;margin-bottom:12px}
+.hp-nombre{font-family:var(--mano);font-size:2.6rem;line-height:1;color:var(--tinta)}
+.hp-sub{font-size:1rem;color:var(--tenue)}
+.hp-sub b{font-family:var(--mano);font-size:1.25rem;color:var(--tinta);font-weight:700}
+.hp-px{min-width:200px;text-align:right}
+.hp-barrapx{height:8px;border:1px solid var(--linea);border-radius:5px;margin-top:4px;overflow:hidden}
+.hp-barrapx i{display:block;height:100%;background:var(--acento);opacity:.75}
+.hp-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+@media (max-width:900px){.hp-grid{grid-template-columns:1fr}.hp-nombre{font-size:2.1rem}.hp-cab{grid-template-columns:1fr}.hp-px{text-align:left}}
+.hp-caja{border:1.5px solid var(--linea);border-radius:10px;padding:8px 10px;margin-bottom:12px;background:rgba(255,255,255,.12);position:relative}
+.hp.noche .hp-caja{background:rgba(255,255,255,.03)}
+.hp-tit{font-family:var(--imprenta);font-weight:700;font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--acento);
+  border-bottom:1px solid var(--linea);margin:-2px -2px 6px;padding-bottom:3px}
+.hp-cars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hp-grid>div,.hp-caja,.hp-trio>*{min-width:0}
+.hp{overflow-wrap:anywhere}
+.hp-car{border:1.5px solid var(--linea);border-radius:14px 14px 22px 22px;text-align:center;padding:4px 2px 8px}
+.hp-car small{display:block;font-size:.66rem;letter-spacing:.06em;color:var(--tenue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-car .mano{font-size:2rem;line-height:1.05;display:block}
+.hp-car span.val{display:inline-block;border:1px solid var(--linea);border-radius:10px;padding:0 9px;font-family:var(--mano);font-size:1.05rem}
+.hp-fila{display:flex;align-items:baseline;gap:7px;padding:1px 0;border-bottom:1px dotted rgba(120,100,70,.35);font-size:.98rem}
+.hp-fila:last-child{border-bottom:0}
+.hp-punto{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--tinta);flex:none;transform:translateY(1px)}
+.hp-punto.si{background:var(--tinta)}
+.hp-punto.doble{background:var(--acento);border-color:var(--acento)}
+.hp-fila .mano{min-width:2.2em;text-align:right;font-size:1.2rem}
+.hp-fila em{margin-left:auto;font-style:normal;font-size:.75rem;color:var(--tenue)}
+.hp-trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.hp-escudo small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-escudo{text-align:center;padding:6px 2px 10px;border:1.5px solid var(--linea);background:rgba(255,255,255,.12)}
+.hp-escudo.ca{border-radius:8px 8px 50% 50% / 8px 8px 40% 40%}
+.hp-escudo.redondo{border-radius:18px}
+.hp-escudo small{display:block;font-size:.7rem;letter-spacing:.12em;color:var(--tenue)}
+.hp-escudo .mano{font-size:2.1rem;line-height:1.05}
+.hp-pg{display:flex;align-items:baseline;gap:10px}
+.hp-pg .mano{font-size:2.4rem}
+.hp-pg .max{font-family:var(--mano);font-size:1.3rem;color:var(--tenue)}
+.hp-bar{height:9px;border:1px solid var(--linea);border-radius:6px;overflow:hidden;margin:4px 0 6px}
+.hp-bar i{display:block;height:100%;background:var(--acento);opacity:.7}
+.hp-pips{display:inline-flex;gap:4px;flex-wrap:wrap;vertical-align:middle}
+.hp-pips i{width:12px;height:12px;border:1.5px solid var(--tinta);border-radius:50%}
+.hp-pips i.lleno{background:var(--acento);border-color:var(--acento)}
+.hp-pips.cuad i{border-radius:2px}
+.hp-tabla{width:100%;border-collapse:collapse;font-size:.95rem}
+.hp-tabla th{font-weight:700;font-size:.72rem;letter-spacing:.1em;color:var(--tenue);text-align:left;border-bottom:1px solid var(--linea)}
+.hp-tabla td{border-bottom:1px dotted rgba(120,100,70,.35);padding:3px 4px 3px 0;vertical-align:top}
+.hp-tabla td.mano{font-size:1.2rem;white-space:nowrap}
+.hp-etq{display:inline-block;font-size:.66rem;letter-spacing:.06em;border:1px solid var(--acento);color:var(--acento);border-radius:3px;padding:0 3px;margin-left:3px;vertical-align:1px}
+.hp-rasgo{border-bottom:1px dotted rgba(120,100,70,.35);padding:4px 0}
+.hp-rasgo:last-child{border-bottom:0}
+.hp-rasgo b{font-family:var(--imprenta);font-size:1rem}
+.hp-rasgo small{color:var(--tenue);font-size:.72rem;letter-spacing:.06em;margin-left:4px}
+.hp-rasgo p{margin:2px 0 0;font-size:1rem;line-height:1.35;font-family:"Cormorant Garamond",Georgia,serif}
+.hp .hp-fila em,.hp .hp-sub{font-family:"Cormorant Garamond",Georgia,serif}
+.hp-texto{font-family:var(--mano);font-size:1.15rem;line-height:1.3}
+.hp-lista{margin:0;padding-left:1.1em;font-family:var(--mano);font-size:1.12rem;line-height:1.3}
 .lugar-piso{fill:#f2d06b;stroke:#0b0e13;stroke-width:1.2;pointer-events:none}
 .pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
 .ley-piso{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.85rem;margin-top:8px}.ley-piso i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
@@ -188,8 +261,18 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 <div class="wrap">
   <header>
     <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
-    <button class="sec" id="abrirAjustes">Conexión</button>
+    <div style="display:flex;gap:8px"><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
   </header>
+
+  <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
+    <div class="hp-barra"><span class="eyebrow">Hoja de personaje</span><button class="sec" id="estiloHoja">Estilo</button><button class="sec" id="cerrarHoja">Cerrar</button></div>
+    <div class="hp-estilo" id="panelEstiloHoja" hidden>
+      <label>Papel<select id="hpTema"><option value="">Pergamino</option><option value="noche">Tinta nocturna</option><option value="pizarra">Pizarra</option></select></label>
+      <label>Tinta de los títulos<select id="hpAcento"><option value="#8b1e2d">Granate</option><option value="#4f6b3a">Musgo</option><option value="#1f4e79">Azul tinta</option><option value="#a0782c">Oro viejo</option><option value="#5b3a7a">Violeta</option></select></label>
+      <label>Letra de lo escrito<select id="hpLetra"><option value='"Caveat",cursive'>Pluma rápida</option><option value='"Kalam",cursive'>Lápiz</option><option value='"Patrick Hand",cursive'>Imprenta a mano</option><option value='"IM Fell English",serif'>Tipografía antigua</option></select></label>
+    </div>
+    <div class="hp" id="papelHoja"></div>
+  </div>
 
   <section class="panel" id="ajustes" hidden>
     <div class="eyebrow">Conexión con la mesa</div>
@@ -356,6 +439,65 @@ function pintar(e){
   pintarCombate(e.combate||null);
   pintarSubida(e.subida||null);
   pintarPiso(e.combate?null:(e.exploracion||null));
+  hojaPJ=e.hoja||null; $("abrirHoja").hidden=!hojaPJ; if(!$("hoja").hidden)pintarHoja();
+}
+
+
+// ---- Hoja de personaje: se llena sola con lo que publica tools/hoja_pj.py ----
+let hojaPJ=null, estiloActual=null;
+const sg=n=>(n>=0?"+":"−")+Math.abs(n);
+function estiloHoja(){let e=estiloActual;if(!e){e={};try{e=JSON.parse(localStorage.getItem("mesa_hoja_estilo")||"{}")}catch(_){};estiloActual=e}
+  const papel=$("papelHoja");papel.className="hp"+(e.tema?" "+e.tema:"");papel.style.setProperty("--acento",e.acento||"#8b1e2d");papel.style.setProperty("--mano",e.letra||'"Caveat",cursive');
+  $("hpTema").value=e.tema||"";$("hpAcento").value=e.acento||"#8b1e2d";$("hpLetra").value=e.letra||'"Caveat",cursive'}
+function guardarEstiloHoja(){estiloActual={tema:$("hpTema").value,acento:$("hpAcento").value,letra:$("hpLetra").value};
+  try{localStorage.setItem("mesa_hoja_estilo",JSON.stringify(estiloActual))}catch(_){}; estiloHoja()}
+["hpTema","hpAcento","hpLetra"].forEach(id=>$(id).addEventListener("change",guardarEstiloHoja));
+$("estiloHoja").addEventListener("click",()=>{$("panelEstiloHoja").hidden=!$("panelEstiloHoja").hidden});
+$("abrirHoja").addEventListener("click",()=>{$("hoja").hidden=false;document.body.style.overflow="hidden";pintarHoja()});
+$("cerrarHoja").addEventListener("click",()=>{$("hoja").hidden=true;document.body.style.overflow=""});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden)$("cerrarHoja").click()});
+const pips=(q,m,cls="")=>`<span class="hp-pips ${cls}">${Array.from({length:m},(_,i)=>`<i class="${i<q?"lleno":""}"></i>`).join("")}</span>`;
+function pintarHoja(){
+  const h=hojaPJ, P=$("papelHoja"); estiloHoja(); if(!h){P.innerHTML='<p class="hp-texto">Todavía no llegó la hoja.</p>';return}
+  const clases=h.clases.map(c=>`${c.clase} ${c.nivel}`).join(" · ")+(h.subclases.length?` <span>(${h.subclases.map(esc).join(", ")})</span>`:"");
+  const px=h.px_siguiente?Math.min(100,100*h.px/h.px_siguiente):100;
+  const cars=Object.entries(h.caracteristicas).map(([k,c])=>`<div class="hp-car"><small>${esc(c.nombre)}</small><span class="mano">${sg(c.mod)}</span><span class="val">${c.valor}</span></div>`).join("");
+  const salv=h.salvaciones.map(s=>`<div class="hp-fila"><i class="hp-punto ${s.competente?"si":""}"></i><span class="mano">${sg(s.bono)}</span>${esc(s.nombre)}</div>`).join("");
+  const habs=h.habilidades.map(s=>`<div class="hp-fila"><i class="hp-punto ${s.pericia?"doble":s.competente?"si":""}"></i><span class="mano">${sg(s.bono)}</span>${esc(s.nombre)}<em>${s.car}</em></div>`).join("");
+  const pas=Object.entries(h.pasivas).map(([k,v])=>`<div class="hp-fila"><span class="mano">${v}</span>${esc(k)} pasiva</div>`).join("");
+  const dg=Object.entries(h.dados_de_golpe.total).map(([d,n])=>`${d} ${pips(h.dados_de_golpe.quedan[d]??n,n)}`).join(" &nbsp; ");
+  const ata=h.ataques.map(a=>`<tr><td>${esc(a.nombre)}${a.notas?`<div class="hp-sub" style="font-size:.78rem">${esc(a.notas.replace(/^; /,""))}</div>`:""}</td><td class="mano">${sg(a.bono)}</td><td class="mano">${esc(a.dano)}</td><td class="mano">${a.alcance?a.alcance+" p":"—"}</td></tr>`).join("");
+  const cj=h.conjuros, esp=cj.espacios.map(e=>`<div class="hp-fila">${esc(e.nombre)} ${pips(e.quedan,e.max)}<em>${esc(e.recupera||"")}</em></div>`).join("");
+  const niveles={};cj.lista.forEach(s=>{const k=s.nivel===0?"Trucos":s.nivel?`Nivel ${s.nivel}`:"Sin nivel";(niveles[k]=niveles[k]||[]).push(s)});
+  const conj=Object.keys(niveles).sort((a,b)=>(a==="Trucos"?-1:b==="Trucos"?1:a.localeCompare(b,"es",{numeric:true}))).map(k=>`<div class="hp-tit" style="font-size:.72rem;margin-top:6px">${esc(k)}</div>`+niveles[k].map(s=>`<div class="hp-fila"><span>${esc(s.nombre)}${s.concentracion?'<span class="hp-etq" title="concentración">C</span>':""}${s.ritual?'<span class="hp-etq" title="ritual">R</span>':""}</span><em>${esc([s.escuela,s.tiempo,s.alcance,s.componentes].filter(Boolean).join(" · "))}</em></div>`).join("")).join("");
+  const ras=h.rasgos.map(r=>`<div class="hp-rasgo"><b>${esc(r.nombre)}</b><small>${esc(r.origen)}</small>${r.usos?` <span style="float:right">${r.usos.unidad?`<span class="mano">${r.usos.quedan}/${r.usos.max} ${esc(r.usos.unidad)}</span>`:pips(r.usos.quedan,r.usos.max,"cuad")}</span>`:""}<p>${esc(r.texto)}</p></div>`).join("");
+  const comp=Object.entries(h.competencias).filter(([,v])=>v.length).map(([k,v])=>`<div class="hp-fila"><b style="min-width:6.5em">${esc(k)}</b><span class="mano" style="text-align:left;font-size:1.1rem">${esc(v.join(", "))}</span></div>`).join("");
+  P.innerHTML=`<div class="hp-cab"><div><div class="hp-nombre">${esc(h.nombre)}</div>
+      <div class="hp-sub"><b>${clases}</b> — ${esc(h.pueblo||"")} — ${esc(h.trasfondo||"")}</div>
+      <div class="hp-sub">${esc(h.alineamiento||"")}${h.deidad?` · ${esc(h.deidad)}`:""}${h.origen?` · de ${esc(h.origen)}`:""}</div></div>
+    <div class="hp-px"><div class="hp-sub">Nivel <b>${h.nivel}</b> · Competencia <b>${sg(h.competencia)}</b></div>
+      <div class="hp-sub">PX <b>${h.px}</b>${h.px_siguiente?` / ${h.px_siguiente}`:""}</div><div class="hp-barrapx"><i style="width:${px}%"></i></div></div></div>
+  <div class="hp-grid">
+    <div><div class="hp-caja"><div class="hp-tit">Características</div><div class="hp-cars">${cars}</div></div>
+      <div class="hp-caja"><div class="hp-tit">Salvaciones</div>${salv}</div>
+      <div class="hp-caja"><div class="hp-tit">Habilidades</div>${habs}</div>
+      <div class="hp-caja"><div class="hp-tit">Pasivas</div>${pas}</div></div>
+    <div><div class="hp-trio"><div class="hp-escudo ca" title="${esc(h.nota_ca||"")}"><small>CA</small><span class="mano">${h.ca}</span></div>
+        <div class="hp-escudo redondo"><small>INICIATIVA</small><span class="mano">${sg(h.iniciativa)}</span></div>
+        <div class="hp-escudo redondo"><small>VELOCIDAD</small><span class="mano">${h.velocidad}</span><small>pies</small></div></div>
+      <div class="hp-caja"><div class="hp-tit">Puntos de golpe</div><div class="hp-pg"><span class="mano">${h.pg}</span><span class="max">/ ${h.pg_max}</span>${h.pg_temporales?`<span class="mano" style="font-size:1.4rem">+${h.pg_temporales} temp.</span>`:""}</div>
+        <div class="hp-bar"><i style="width:${Math.max(0,Math.min(100,100*h.pg/h.pg_max))}%"></i></div>
+        <div class="hp-fila">Dados de golpe ${dg}</div><div class="hp-fila">Agotamiento ${pips(h.agotamiento,6,"cuad")}</div>
+        ${h.sentidos.length?`<div class="hp-fila">Sentidos <span class="mano" style="text-align:left;font-size:1.1rem">${esc(h.sentidos.join(", "))}</span></div>`:""}</div>
+      <div class="hp-caja"><div class="hp-tit">Ataques</div><table class="hp-tabla"><tr><th>Nombre</th><th>Ataque</th><th>Daño</th><th>Alcance</th></tr>${ata}</table></div>
+      <div class="hp-caja"><div class="hp-tit">Conjuros</div><div class="hp-trio" style="margin-bottom:6px"><div class="hp-escudo redondo"><small>CARACTERÍSTICA</small><span class="mano" style="font-size:1.6rem">${esc(cj.caracteristica||"—")}</span></div>
+          <div class="hp-escudo redondo"><small>CD</small><span class="mano" style="font-size:1.6rem">${cj.cd??"—"}</span></div><div class="hp-escudo redondo"><small>ATAQUE</small><span class="mano" style="font-size:1.6rem">${cj.ataque!=null?sg(cj.ataque):"—"}</span></div></div>
+        ${esp}${conj}${cj.nota?`<p class="hp-sub" style="font-size:.8rem;margin:6px 0 0">${esc(cj.nota)}</p>`:""}</div></div>
+    <div><div class="hp-caja"><div class="hp-tit">Rasgos</div>${ras}</div>
+      <div class="hp-caja"><div class="hp-tit">Competencias e idiomas</div>${comp}</div>
+      <div class="hp-caja"><div class="hp-tit">Equipo</div><ul class="hp-lista">${h.equipo.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><div class="hp-fila" style="margin-top:4px">Dinero <span class="mano">${h.dinero_mo}</span> po</div></div>
+      ${h.personalidad||h.concepto?`<div class="hp-caja"><div class="hp-tit">Quién es</div>${h.concepto?`<p class="hp-texto">${esc(h.concepto)}</p>`:""}${h.personalidad?`<p class="hp-texto">${esc(h.personalidad)}</p>`:""}</div>`:""}</div>
+  </div>`;
 }
 
 // ---- Exploración de piso (DGT-207, fase 1) ----
