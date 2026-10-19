@@ -119,6 +119,10 @@ select.oculto{display:none}
 .ficha.turno circle{stroke:var(--fg);stroke-width:3}
 .ficha.caida{opacity:.35}
 .destino{fill:none;stroke:var(--ember);stroke-width:2;stroke-dasharray:3 2}
+.zona-osc{fill:#000;opacity:.62;pointer-events:none}
+.zona-dif{fill:var(--warn);opacity:.18;pointer-events:none}
+.area-prev{fill:var(--ember);opacity:.3;pointer-events:none}
+.hx.apunta{stroke:var(--warn);stroke-width:2;cursor:crosshair}
 .registro{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;font-size:.92rem}
 .registro .r{color:var(--muted);font-family:var(--mono);font-size:.75rem}
 #panelRegistro summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
@@ -433,8 +437,9 @@ function distHex(a,b){const A=aCubo(a),B=aCubo(b);return(Math.abs(A[0]-B[0])+Mat
 const k=h=>h[0]+","+h[1];
 function alcanzablesHex(f,ini,max,hostiles,aliados){
   const H=new Set(hostiles.map(k)),A=new Set(aliados.map(k)),coste={[k(ini)]:0},prev={};let cola=[[0,ini]];
+  const Z=new Set(((combate&&combate.mapa&&combate.mapa.zonas)||[]).filter(z=>z.dificil).flatMap(z=>z.hexes.map(k)));
   while(cola.length){cola.sort((a,b)=>a[0]-b[0]);const[c,act]=cola.shift();if(c>coste[k(act)])continue;
-    for(const s of vecinosHex(act)){if(!transitableHex(f,s)||H.has(k(s)))continue;const n=c+(HX.dificil.includes(celdaHex(f,s))?10:5);
+    for(const s of vecinosHex(act)){if(!transitableHex(f,s)||H.has(k(s)))continue;const n=c+((HX.dificil.includes(celdaHex(f,s))||Z.has(k(s)))?10:5);
       if(n<=max&&n<(coste[k(s)]??1e9)){coste[k(s)]=n;prev[k(s)]=act;cola.push([n,s])}}}
   A.forEach(a=>delete coste[a]);return{coste,prev};
 }
@@ -450,6 +455,15 @@ function coberturaHex(f,a,b,ocupadas=[]){const n=distHex(a,b),A=aCubo(a),B=aCubo
 // El turno es una lista ordenada: acción, acción adicional y los movimientos que quieras, en cualquier orden
 // (PHB: el movimiento se reparte antes, entre y después de las acciones). Cada movimiento es un tramo.
 let pasos=[], pasoMapa=null, nPaso=0;
+let apuntando=null; // "ad" o "ac": la opción de área cuyo punto se elige tocando el mapa
+function areaDe(p){const v=p==="ad"?form.adicional:form.accion;if(!v||!v.startsWith("op:"))return null;const o=opcion(v.slice(3));return o&&o.area?o:null}
+function dondeDe(p){const o=areaDe(p);return o?(form.c[`${p}_donde`]||o.area.origen[0]):null}
+// Desde dónde se lanza: la posición en el paso de esa acción.
+function lanzaDesde(p){const x=pasos.find(s=>s.tipo===(p==="ad"?"adicional":"accion"));return x?posAntesDe(x.id):yoPos()}
+function centroArea(p){const d=dondeDe(p);if(!d)return null;if(d==="punto"){const v=form.c[`${p}_punto`];return v?v.split(",").map(Number):null}return lanzaDesde(p)}
+// Vista previa de esferas y emanaciones (las de Shalock); conos y líneas los resuelve el motor.
+function hexesArea(o,centro){if(!centro||!o||!o.area)return[];const n=Math.max(1,Math.floor(o.area.tamano_pies/5)),s=[];
+  combate.mapa.filas.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch!=="x"&&ch!==" "&&distHex(centro,[x,y])<=n)s.push([x,y])}));return s}
 let movMapa={}; // id del paso de movimiento -> {destino, coste, ruta}
 const movers=()=>pasos.filter(x=>x.tipo==="mover");
 const tramo=()=>{const m=movers();return m.some(x=>x.id===pasoMapa)?pasoMapa:(m[0]&&m[0].id)||null};
@@ -525,9 +539,13 @@ function pintarMapa(){
   const ruta=new Set(Object.values(movMapa).flatMap(m=>m.ruta.map(k)));
   const ori=origenTramo(tramo());
   let svg="";
-  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
-    svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
+  const oA=apuntando&&areaDe(apuntando), desdeA=oA&&lanzaDesde(apuntando);
+  const apuntable=h=>oA&&desdeA&&5*distHex(desdeA,h)<=(oA.area.alcance_pies||0);
+  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
+    svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${apuntable(h)?"apunta":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
     if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`}));
+  (m.zonas||[]).forEach(z=>z.hexes.forEach(h=>{svg+=`<polygon points="${pts(h)}" class="${z.oscuridad?"zona-osc":"zona-dif"}"><title>${esc(z.nombre)}</title></polygon>`}));
+  ["ad","ac"].forEach(pz=>{const o=areaDe(pz);if(o)hexesArea(o,centroArea(pz)).forEach(h=>{svg+=`<polygon points="${pts(h)}" class="area-prev"/>`})});
   cb.combatientes.filter(c=>c.pos).forEach(c=>{const h=c.pos,cls=c.es_pj?"yo":c.bando==="enemigo"?"ene":"ali";
     const ini=c.id.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();
     svg+=`<g class="ficha ${cls} ${c.activo?"":"caida"} ${c.id===cb.turno?"turno":""}"><circle cx="${cx(h)}" cy="${cy(h)}" r="${R*0.62}"/><text x="${cx(h)}" y="${cy(h)+4}">${esc(ini)}</text><title>${esc(c.id)}</title></g>`});
@@ -541,11 +559,13 @@ function pintarMapa(){
   if(!mapaCentrado||(tuyo&&turnoPrevio!=="Shalock")){mapaCentrado=true;requestAnimationFrame(centrarMapa)}
   turnoPrevio=cb.turno;
   const nT=movers().findIndex(x=>x.id===tramo())+1;
-  $("infoMapa").textContent=!tuyo?"Iniciales: tu ficha en violeta, aliados en verde, enemigos en rojo."
+  $("infoMapa").textContent=oA?`Toca el punto de ${oA.nombre} (hasta ${oA.area.alcance_pies} pies, en amarillo). Se ve el área en violeta.`
+    :!tuyo?"Iniciales: tu ficha en violeta, aliados en verde, enemigos en rojo."
     :!nT?"Para moverte, agrega un Movimiento en «Armar turno» (+)."
     :`Marcando el Movimiento ${nT}: toca un hexágono resaltado. Te quedan ${quedanPies()} pies. Toca su punto de partida para borrarlo.`;
   $("mapa").querySelectorAll(".hx").forEach(p=>p.onclick=()=>{
     if(!tuyo||!yo)return;const h=p.dataset.h.split(",").map(Number);
+    if(oA){if(apuntable(h)){form.c[`${apuntando}_punto`]=h.join(",");apuntando=null;pintarCombate(combate)}return}
     const t=tramo();if(!t)return;const o=origenTramo(t);
     if(k(h)===k(o)){delete movMapa[t];sanearTramos();pintarCombate(combate);return}
     if(alc.coste[k(h)]===undefined)return;
@@ -655,6 +675,10 @@ function campos(p,valor){
     const lista=o.objetivo==="aliados"?aliados():enemigos();
     h.push(`<div class="estado">Hasta ${maxObjetivos(o,p)} criatura(s) con este espacio.</div><div class="opciones">${lista.map(x=>`<label><input type="checkbox" data-k="${p}_obj_${esc(x)}"> ${esc(x)}</label>`).join("")}</div>`);
   }
+  if(o.area){const or=o.area.origen,d=dondeDe(p);
+    if(or.length>1)h.push(selector(`${p}_donde`,or.map(v=>({v,t:v==="punto"?"En un punto (lo tocas en el mapa)":v==="objeto"?"En un objeto que sostengo (se mueve conmigo)":"Desde mí"})),"Dónde"));
+    if(d==="punto")h.push(`<button type="button" class="sec" data-apuntar="${p}">${form.c[`${p}_punto`]?`Punto ${form.c[`${p}_punto`]} · cambiar`:"Elegir el punto en el mapa"}</button>`);
+    h.push(`<div class="estado">Área: ${o.area.forma} de ${o.area.tamano_pies} pies${d==="objeto"?" alrededor de lo que sostienes; se mueve contigo":d==="propio"?" alrededor tuyo":""}.</div>`)}
   if(o.caracteristica)h.push(selector(`${p}_car`,["FUE","DES","CON","INT","SAB","CAR"],"Característica (desventaja en sus pruebas)"));
   if(o.prueba){const hb=s.habilidades||{};h.push(selector(`${p}_hab`,Object.entries(hb).map(([k,v])=>({v:k,t:`${k} ${v>=0?"+":""}${v}`})),"Prueba"))}
   if(o.palabra)h.push(`<label>Palabra<input data-k="${p}_palabra" placeholder="Huye, Suelta, Al suelo…"></label>`);
@@ -666,6 +690,8 @@ document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.data
   // La acción apunta por defecto al blanco de la acción adicional, salvo que el jugador lo cambie.
   if(k==="ac_objetivo")form.acManual=true;
   if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-apuntar]");if(!b)return;
+  apuntando=b.dataset.apuntar;elegirPestana(esPC()?pestana:"turno");pintarMapa();$("panelMapa").scrollIntoView({behavior:"smooth",block:"center"})});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
 $("selAccion").onchange=ev=>{form.accion=ev.target.value;pintarCombate(combate)};
 $("notas").oninput=ev=>{form.notas=ev.target.value};
@@ -809,10 +835,14 @@ function revisar(){
     else if(a.clase==="arma"&&dd>(a.alcance||5))bloqueos.push(`${obj} está a ${dd} pies: para golpear cuerpo a cuerpo muévete antes al menos ${dd-(a.alcance||5)} pies hacia él.`);
     else if(a.clase!=="arma"&&a.alcance&&dd>a.alcance)bloqueos.push(`${obj} está a ${dd} pies, fuera del alcance de ${a.alcance}.`);
     if(a.clase!=="arma"&&enemigoJunto())avisos.push("Atacas a distancia con un enemigo junto a ti: el ataque va con desventaja.");
+    const bl=combate.combatientes.find(x=>x.id===obj)||{};
+    if(bl.lo_ves===false)avisos.push(`No ves a ${obj}: desventaja.`);
+    if(bl.te_ve===false)avisos.push(`${obj} no te ve: ventaja.`);
     if(combate.mapa){const c=combate.combatientes.find(x=>x.id===obj),o=origenAtaque();
       if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==c.id).map(x=>x.pos));
         if(cob===null)bloqueos.push(`No ves a ${obj}: hay un muro en medio.`);else if(cob)avisos.push(`${obj} tiene cobertura (+${cob} a su CA).`)}}
   }
+  [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.area&&dondeDe(p)==="punto"&&!form.c[`${p}_punto`])bloqueos.push(`${o.nombre}: elige el punto en el mapa.`)});
   if(!pasos.length&&!mov.mv.length&&!s.turno_abierto)bloqueos.push("Agrega al menos un paso con «+».");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
@@ -847,6 +877,7 @@ function describir(p,valor){
   if(o.prueba)x.habilidad=form.c[`${p}_hab`];
   if(o.puntos)x.puntos=Number(form.c[`${p}_puntos`]);
   if(o.concentracion)x.concentracion=true;
+  if(o.area){const d=dondeDe(p);if(d==="punto"&&form.c[`${p}_punto`])x.punto=form.c[`${p}_punto`].split(",").map(Number);if(d==="objeto")x.ancla="propio"}
   return x;
 }
 
@@ -858,7 +889,9 @@ function tirarTurno(){
   const oa=ad&&ad.tipo==="opcion"?opcion(ad.id):null;
   const previa=oa&&oa.al_impactar_si_lanza&&form.orden==="antes"?{datos:oa.al_impactar_si_lanza,objetivo:ad.objetivo,nivel:ad.nivel||1}:null;
   if(ac&&ac.tipo==="ataque"){
-    const a=ataque(ac.id), ven=!!form.c.ac_ventaja, des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto());
+    const blanco=combate.combatientes.find(x=>x.id===form.c.ac_objetivo)||{};
+    // PHB: atacar a quien no ves, desventaja; a quien no te ve, ventaja (lo calcula el motor con la oscuridad y la línea de visión).
+    const a=ataque(ac.id), ven=!!form.c.ac_ventaja||blanco.te_ve===false, des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto())||blanco.lo_ves===false;
     Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,impactosPara(form.c.ac_objetivo,previa)));
   }
   // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
