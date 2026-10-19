@@ -207,8 +207,9 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <section class="panel urgente" id="panelReaccion" hidden>
       <div class="eyebrow">Reacción disponible</div>
       <div id="motivoReaccion"></div>
-      <label for="armaReaccion" id="lblArmaReaccion">Ataque de oportunidad con<select id="armaReaccion"></select></label>
-      <button id="atacarReaccion">Atacar</button>
+      <div id="filaAtaqueReaccion"><label for="armaReaccion" id="lblArmaReaccion">Ataque de oportunidad con<select id="armaReaccion"></select></label>
+      <button id="atacarReaccion">Atacar</button></div>
+      <div id="opcionesReaccion"></div>
       <button class="sec" id="dejarReaccion">Dejarlo ir</button>
       <div class="estado" id="estadoReaccion"></div>
     </section>
@@ -1082,6 +1083,15 @@ function pintarReaccion(){
   const rp=combate&&combate.reaccion_pendiente, p=$("panelReaccion");
   p.hidden=!rp||!!enCurso; if(p.hidden)return;
   $("motivoReaccion").textContent=rp.motivo;
+  const ops=(rp.opciones||[]).filter(o=>o.id!=="ataque_de_oportunidad"&&o.id!=="preparada");
+  $("filaAtaqueReaccion").hidden=!(rp.tipo==="preparada"||(rp.opciones||[]).some(o=>o.id==="ataque_de_oportunidad"));
+  $("opcionesReaccion").innerHTML=ops.map(o=>{const es=o.nivel>0?espacios(o.nivel):[];
+    return `<div class="fila-reaccion">${o.nivel>0?`<label>${esc(o.nombre)} con <select data-espacio-reac="${o.id}">${es.map(e=>`<option value="${e.v}">${esc(e.t)}</option>`).join("")}</select></label>`:`<span>${esc(o.nombre)}</span>`}
+      <button type="button" data-usar-reac="${o.id}" ${o.nivel>0&&!es.length?"disabled":""}>Usar</button></div>`}).join("");
+  $("opcionesReaccion").querySelectorAll("[data-usar-reac]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.usarReac, sel=$("opcionesReaccion").querySelector(`[data-espacio-reac="${id}"]`);
+    try{await enviarReaccion({tipo:"reaccion",ataque:null,opcion:{id,espacio:sel?sel.value:null,objetivos:[rp.objetivo]},ts:Date.now()});$("panelReaccion").hidden=true}
+    catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}});
   $("lblArmaReaccion").firstChild.textContent=rp.tipo==="preparada"?"Acción preparada: ":"Ataque de oportunidad con";
   const armas=combate.shalock.acciones.filter(a=>rp.tipo==="preparada"?a.id===rp.ataque:a.clase==="arma");
   const prev=$("armaReaccion").value;
