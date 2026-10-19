@@ -686,7 +686,7 @@ function pintarCombate(cb){
   pestanas(cb);
   if(!cb)return;
   const tuyo=cb.turno==="Shalock";
-  $("turno").innerHTML=`<div class="banner ${tuyo?"tuyo":""}">${tuyo?"Es tu turno":cb.turno?"Turno de "+esc(cb.turno):"Preparando el combate"}</div><div class="c-dato" style="text-align:center">Ronda ${cb.ronda}</div>`;
+  $("turno").innerHTML=`<div class="banner ${tuyo?"tuyo":""}">${tuyo?"Es tu turno":cb.turno?"Turno de "+esc(cb.turno):"Preparando el combate"}</div><div class="c-dato" style="text-align:center">Ronda ${cb.ronda}</div>${cb.pausa?`<div class="c-dato" style="text-align:center;color:var(--warn)">${esc(cb.pausa)}</div>`:""}`;
   const tarjeta=c=>{
     const cls={ileso:"ileso",herido:"herido","muy herido":"muy","caído":"caido"}[c.estado]||"";
     const vida=c.pg!=null?`<span class="c-dato">PG ${c.pg}/${c.pg_max}${c.pg_temporales?` +${c.pg_temporales}`:""}${c.ca!=null?` · CA ${c.ca}`:""}</span>`:`<span class="ap ${cls}">${esc(c.estado)}</span>`;
