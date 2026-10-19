@@ -121,6 +121,12 @@ select.oculto{display:none}
 .destino{fill:none;stroke:var(--ember);stroke-width:2;stroke-dasharray:3 2}
 .zona-osc{fill:#000;opacity:.62;pointer-events:none}
 .amb-oscuridad{fill:#000;opacity:.42;pointer-events:none} .amb-tenue{fill:#000;opacity:.2;pointer-events:none}
+.zona-osc-raya{fill:url(#rayaMagica);pointer-events:none}
+.sim{font-size:9px;text-anchor:middle;pointer-events:none;opacity:.75}
+.sim.luz{fill:var(--warn)} .sim.tenue{fill:var(--muted)} .sim.osc{fill:#c9d1d9;opacity:.45} .sim.magica{fill:#b9a8ff;opacity:.9}
+.leyenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.8rem;color:var(--muted);margin-top:6px}
+.leyenda span{display:inline-flex;align-items:center;gap:5px}
+.leyenda i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--line);font-style:normal;font-size:10px;line-height:14px;text-align:center}
 .zona-dif{fill:var(--warn);opacity:.18;pointer-events:none}
 .area-prev{fill:var(--ember);opacity:.3;pointer-events:none}
 .hx.apunta{stroke:var(--warn);stroke-width:2;cursor:crosshair}
@@ -224,7 +230,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div id="panelMapa" hidden>
       <div class="tramos" id="tramosMapa" aria-label="Qué movimiento marcas"></div>
       <div class="zoom"><button class="sec" id="zoomMenos" aria-label="Alejar">−</button><button class="sec" id="zoomMas" aria-label="Acercar">+</button><button class="sec" id="centrarMapa">Centrar en mí</button></div>
-      <div id="mapa"></div><div class="estado" id="infoMapa"></div>
+      <div id="mapa"></div><div class="leyenda" id="leyendaMapa" aria-label="Leyenda del mapa"></div><div class="estado" id="infoMapa"></div>
     </div>
     </div>
     <div class="lista" id="combatientes"></div>
@@ -545,10 +551,20 @@ function pintarMapa(){
   f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
     svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${apuntable(h)?"apunta":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
     if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`}));
-  // Luz: el ambiente oscurece todo salvo lo que alumbran las fuentes (antorchas…); la oscuridad mágica va encima.
-  if(m.luz&&m.luz!=="brillante"){const lit={};Object.entries(m.luz_hexes||{}).forEach(([n,hs])=>hs.forEach(h=>lit[k(h)]=n));
-    f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const n=lit[k([x,y])]||m.luz;if(n!=="brillante")svg+=`<polygon points="${pts([x,y])}" class="amb-${n}"/>`}))}
-  (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{svg+=`<polygon points="${pts(h)}" class="${z.oscuridad?"zona-osc":"zona-dif"}"><title>${esc(z.nombre)}</title></polygon>`}));
+  // Luz: el ambiente oscurece todo salvo lo que alumbran las fuentes (antorchas…); la oscuridad mágica va encima,
+  // rayada en violeta para no confundirla con la natural. Cada hexágono lleva su símbolo: ☀ ◐ ● ✦.
+  const lit={};Object.entries(m.luz_hexes||{}).forEach(([n,hs])=>hs.forEach(h=>lit[k(h)]=n));
+  const magica=new Set((m.zonas||[]).filter(z=>z.oscuridad).flatMap(z=>z.hexes.map(k)));
+  const SIM={brillante:["☀","luz"],tenue:["◐","tenue"],oscuridad:["●","osc"]}, presentes=new Set();
+  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y];
+    if(magica.has(k(h))){presentes.add("magica");return}
+    const n=lit[k(h)]||m.luz||"brillante";
+    if(n!=="brillante")svg+=`<polygon points="${pts(h)}" class="amb-${n}"/>`;
+    // ☀ solo donde una fuente alumbra un ambiente más oscuro; con todo iluminado no hace falta marcar.
+    if(n!=="brillante"||lit[k(h)]){presentes.add(n);svg+=`<text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim ${SIM[n][1]}">${SIM[n][0]}</text>`}}));
+  (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{
+    if(z.oscuridad)svg+=`<polygon points="${pts(h)}" class="zona-osc"/><polygon points="${pts(h)}" class="zona-osc-raya"><title>${esc(z.nombre)}</title></polygon><text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim magica">✦</text>`;
+    else svg+=`<polygon points="${pts(h)}" class="zona-dif"><title>${esc(z.nombre)}</title></polygon>`}));
   ["ad","ac"].forEach(pz=>{const o=areaDe(pz);if(o)hexesArea(o,centroArea(pz)).forEach(h=>{svg+=`<polygon points="${pts(h)}" class="area-prev"/>`})});
   cb.combatientes.filter(c=>c.pos).forEach(c=>{const h=c.pos,cls=c.es_pj?"yo":c.bando==="enemigo"?"ene":"ali";
     const ini=c.id.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();
@@ -559,7 +575,22 @@ function pintarMapa(){
   const ms=movers();
   $("tramosMapa").innerHTML=tuyo&&ms.length?ms.map((x,i)=>`<button type="button" data-tramo="${x.id}" class="${x.id===tramo()?"activa":""}">Movimiento ${i+1}${movMapa[x.id]?` · ${movMapa[x.id].coste} p`:""}</button>`).join(""):"";
   $("tramosMapa").querySelectorAll("button").forEach(b=>b.onclick=()=>{pasoMapa=b.dataset.tramo;pintarMapa();pintarPasos()});
-  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${svg}</svg>`;
+  const defs=`<defs><pattern id="rayaMagica" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="none"/><line x1="0" y1="0" x2="0" y2="6" stroke="#8b7cf6" stroke-width="2" opacity=".55"/></pattern></defs>`;
+  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${defs}${svg}</svg>`;
+  // Leyenda: solo lo que aparece en este mapa.
+  const tiene=ch=>f.some(fila=>fila.includes(ch)), L=[];
+  const cuadro=(fondo,txt="")=>`<i style="background:${fondo}">${txt}</i>`;
+  L.push(`<span>${cuadro("var(--hex-suelo)")}suelo</span>`);
+  if(tiene("~"))L.push(`<span>${cuadro("var(--hex-dificil)")}terreno difícil</span>`);
+  if(tiene("w"))L.push(`<span>${cuadro("var(--hex-agua)")}agua (difícil)</span>`);
+  if(tiene("o")||tiene("O"))L.push(`<span>${cuadro("var(--hex-cob)","△")}cobertura media · ▲ tres cuartos</span>`);
+  if(tiene("#"))L.push(`<span>${cuadro("var(--hex-muro)")}muro (no se pasa ni se ve)</span>`);
+  if((m.zonas||[]).some(z=>z.dificil))L.push(`<span>${cuadro("rgba(227,179,65,.3)")}terreno difícil de un conjuro</span>`);
+  if(presentes.has("brillante"))L.push(`<span><i style="color:var(--warn)">☀</i>luz</span>`);
+  if(presentes.has("tenue"))L.push(`<span><i>◐</i>penumbra (se ve)</span>`);
+  if(presentes.has("oscuridad"))L.push(`<span><i style="background:rgba(0,0,0,.45)">●</i>oscuridad (solo con visión en la oscuridad)</span>`);
+  if(presentes.has("magica"))L.push(`<span><i style="background:#000;color:#b9a8ff">✦</i>oscuridad mágica (no se ve a través)</span>`);
+  $("leyendaMapa").innerHTML=L.join("");
   if(!mapaCentrado||(tuyo&&turnoPrevio!=="Shalock")){mapaCentrado=true;requestAnimationFrame(centrarMapa)}
   turnoPrevio=cb.turno;
   const nT=movers().findIndex(x=>x.id===tramo())+1;
