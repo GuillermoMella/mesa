@@ -531,8 +531,8 @@ function pintarCombate(cb){
     .map(([k,v])=>`<div class="rec"><span class="eyebrow">${k}</span><b>${v}</b></div>`).join("");
   const eco=s.economia||{}, tuyo2=cb.turno==="Shalock";
   $("economia").innerHTML=[["Acción",eco.accion&&tuyo2],["Acción adicional",eco.adicional&&tuyo2],["Reacción",s.reaccion_usada]].map(([k,u])=>`<span class="${u?"usada":""}">${k}: ${u?"usada":"disponible"}</span>`).join("");
-  const ef=s.efectos;
-  $("efectos").innerHTML=[s.concentracion?`Concentrado: ${s.concentracion}`:"",ef.bendecido?"Bendecido (+1d4)":"",ef.maldicion?`Maldición: ${ef.maldicion}`:"",ef.maleficio?`Maleficio: ${ef.maleficio}`:""].filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
+  $("efectos").innerHTML=[s.concentracion?`Concentrado: ${s.concentracion}`:"",...(s.estados_activos||[]).map(e=>e.portador==="Shalock"?e.nombre:`${e.nombre}: ${e.portador}`)]
+    .filter(Boolean).map(x=>`<span class="chip on">${esc(x)}</span>`).join("")||`<span class="chip">sin efectos activos</span>`;
   // Menús (se reconstruyen conservando lo elegido).
   const ad=[`<option value="">Ninguna</option>`,...s.opciones.filter(o=>o.tiempo==="adicional").map(o=>`<option value="op:${o.id}">${esc(o.nombre)}</option>`),`<option value="otra">Otra (escribirla)</option>`];
   $("selAdicional").innerHTML=ad.join(""); $("selAdicional").value=form.adicional;
@@ -582,7 +582,7 @@ function campos(p,valor){
     const a=ataque(valor.slice(4));
     h.push(selector(`${p}_objetivo`,enemigos(),"Blanco"));
     h.push(`<div class="opciones"><label><input type="checkbox" data-k="${p}_ventaja"> Ventaja</label><label><input type="checkbox" data-k="${p}_desventaja"> Desventaja</label></div>`);
-    if(a.castigo)h.push(`<div class="estado">El Castigo divino se decide después, si impactas.</div>`);
+    const opI=opcionalImpacto(a);if(opI)h.push(`<div class="estado">${esc(opI.nombre)} se decide después, si impactas.</div>`);
     return h.join("");
   }
   const o=opcion(valor.slice(3));
@@ -823,7 +823,8 @@ function impactosPara(obj,previa){
 function tirarAtaque(id,obj,modo,ef){
   const s=combate.shalock, a=ataque(id);
   const d20=modo?[d(20),d(20)]:[d(20)], natural=modo==="ventaja"?Math.max(...d20):modo==="desventaja"?Math.min(...d20):d20[0];
-  const bend=s.efectos.bendecido?d(4):0;
+  // Dados que suman los estados de Shalock a sus ataques (Bendición: 1d4), según el motor.
+  const bend=(s.dados_ataque||[]).reduce((t,x)=>t+tirarExpr(x,false,false).total,0);
   return{tipo:"ataque",fase:"ataque",id,accion:a.nombre,clase:a.clase,objetivo:obj,d20,natural,bono:a.bono,bendicion:bend,
          total:natural+a.bono+bend,modo,critico_desde:ef.critico_desde||20,efectos:ef};
 }
