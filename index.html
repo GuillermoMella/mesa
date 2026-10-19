@@ -118,6 +118,7 @@ select.oculto{display:none}
 .ficha.yo circle{fill:var(--ember)} .ficha.ali circle{fill:var(--ok)} .ficha.ene circle{fill:var(--bad)}
 .ficha.turno circle{stroke:var(--fg);stroke-width:3}
 .ficha.caida{opacity:.35}
+.niebla{fill:#05070a;pointer-events:none} .recuerdo{fill:#3a4252;opacity:.38;pointer-events:none}
 .ficha.fantasma circle{fill:transparent!important;stroke:var(--bad);stroke-width:2;stroke-dasharray:3 3}
 .ficha.fantasma text{fill:var(--bad)}
 .destino{fill:none;stroke:var(--ember);stroke-width:2;stroke-dasharray:3 2}
@@ -443,7 +444,7 @@ document.addEventListener("change",e=>{if(e.target.tagName==="SELECT")mejorarSel
 
 // ---- Mapa de hexágonos (DGT-205) ----
 // Filas «odd-r»: las impares van corridas medio hexágono. 5 pies por paso, 10 en terreno difícil.
-const HX={dificil:"~wo",bloquea:"#xO "};
+const HX={dificil:"~wo",bloquea:"#xO ?"};
 // Bordes entre dos hexágonos (objetos chicos: baranda, muro bajo, pilar, barril): cobertura y, si «dificil», cruzarlos cuesta doble.
 const claveBorde=(a,b)=>[k(a),k(b)].sort().join("|");
 const bordesIdx=()=>{const m={};((combate&&combate.mapa&&combate.mapa.bordes)||[]).forEach(b=>m[claveBorde(b.entre[0],b.entre[1])]=b);return m};
@@ -567,15 +568,19 @@ function pintarMapa(){
   const hexA=apuntando&&apuntando.endsWith("_hex")?apuntando.slice(0,-4):null;
   const oA=apuntando&&!hexA&&areaDe(apuntando), desdeA=oA&&lanzaDesde(apuntando);
   const apuntable=h=>hexA?transitableHex(f,h):oA&&desdeA&&5*distHex(desdeA,h)<=(oA.area.alcance_pies||0);
-  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
+  const vis=m.visibles?new Set(m.visibles.map(k)):null;
+  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y];
+    if(ch==="?"){svg+=`<polygon points="${pts(h)}" class="niebla"/>`;return}
+    const alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
     svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${apuntable(h)?"apunta":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
-    if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`}));
+    if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`;
+    if(vis&&!vis.has(k(h)))svg+=`<polygon points="${pts(h)}" class="recuerdo"><title>lo viste antes; ahora no lo ves</title></polygon>`}));
   // Luz: el ambiente oscurece todo salvo lo que alumbran las fuentes (antorchas…); la oscuridad mágica va encima,
   // rayada en violeta para no confundirla con la natural. Cada hexágono lleva su símbolo: ☀ ◐ ● ✦.
   const lit={};Object.entries(m.luz_hexes||{}).forEach(([n,hs])=>hs.forEach(h=>lit[k(h)]=n));
   const magica=new Set((m.zonas||[]).filter(z=>z.oscuridad).flatMap(z=>z.hexes.map(k)));
   const SIM={brillante:["☀","luz"],tenue:["◐","tenue"],oscuridad:["●","osc"]}, presentes=new Set();
-  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y];
+  f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" "||ch==="?")return;const h=[x,y];
     if(magica.has(k(h))){presentes.add("magica");return}
     const n=lit[k(h)]||m.luz||"brillante";
     if(n!=="brillante")svg+=`<polygon points="${pts(h)}" class="amb-${n}"/>`;
@@ -610,6 +615,8 @@ function pintarMapa(){
   const tiene=ch=>f.some(fila=>fila.includes(ch)), L=[];
   const cuadro=(fondo,txt="")=>`<i style="background:${fondo}">${txt}</i>`;
   L.push(`<span>${cuadro("var(--hex-suelo)")}suelo</span>`);
+  if(tiene("?"))L.push(`<span>${cuadro("#05070a")}sin explorar</span>`);
+  if(m.visibles)L.push(`<span>${cuadro("rgba(58,66,82,.6)")}visto antes (ahora no lo ves)</span>`);
   if(tiene("~"))L.push(`<span>${cuadro("var(--hex-dificil)")}terreno difícil</span>`);
   if(tiene("w"))L.push(`<span>${cuadro("var(--hex-agua)")}agua (difícil)</span>`);
   if(tiene("o"))L.push(`<span>${cuadro("var(--hex-cob)","△")}obstáculo grande bajo: se cruza como difícil; +2 detrás</span>`);
