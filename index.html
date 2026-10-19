@@ -120,6 +120,7 @@ select.oculto{display:none}
 .ficha.caida{opacity:.35}
 .destino{fill:none;stroke:var(--ember);stroke-width:2;stroke-dasharray:3 2}
 .zona-osc{fill:#000;opacity:.62;pointer-events:none}
+.amb-oscuridad{fill:#000;opacity:.42;pointer-events:none} .amb-tenue{fill:#000;opacity:.2;pointer-events:none}
 .zona-dif{fill:var(--warn);opacity:.18;pointer-events:none}
 .area-prev{fill:var(--ember);opacity:.3;pointer-events:none}
 .hx.apunta{stroke:var(--warn);stroke-width:2;cursor:crosshair}
@@ -544,7 +545,10 @@ function pintarMapa(){
   f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const h=[x,y],alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
     svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${apuntable(h)?"apunta":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
     if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`}));
-  (m.zonas||[]).forEach(z=>z.hexes.forEach(h=>{svg+=`<polygon points="${pts(h)}" class="${z.oscuridad?"zona-osc":"zona-dif"}"><title>${esc(z.nombre)}</title></polygon>`}));
+  // Luz: el ambiente oscurece todo salvo lo que alumbran las fuentes (antorchas…); la oscuridad mágica va encima.
+  if(m.luz&&m.luz!=="brillante"){const lit={};Object.entries(m.luz_hexes||{}).forEach(([n,hs])=>hs.forEach(h=>lit[k(h)]=n));
+    f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch==="x"||ch===" ")return;const n=lit[k([x,y])]||m.luz;if(n!=="brillante")svg+=`<polygon points="${pts([x,y])}" class="amb-${n}"/>`}))}
+  (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{svg+=`<polygon points="${pts(h)}" class="${z.oscuridad?"zona-osc":"zona-dif"}"><title>${esc(z.nombre)}</title></polygon>`}));
   ["ad","ac"].forEach(pz=>{const o=areaDe(pz);if(o)hexesArea(o,centroArea(pz)).forEach(h=>{svg+=`<polygon points="${pts(h)}" class="area-prev"/>`})});
   cb.combatientes.filter(c=>c.pos).forEach(c=>{const h=c.pos,cls=c.es_pj?"yo":c.bando==="enemigo"?"ene":"ali";
     const ini=c.id.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();
