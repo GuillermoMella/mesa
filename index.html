@@ -256,6 +256,11 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <label for="ritmoPiso">Ritmo<select id="ritmoPiso">
       <option value="rapido">Rápido (−5 a la Percepción pasiva)</option><option value="normal" selected>Normal</option>
       <option value="lento">Lento</option><option value="sigilo">Lento, con sigilo</option></select></label>
+    <label for="actividadPiso">Qué hace Shalock mientras marchan<select id="actividadPiso">
+      <option value="vigilar">Vigilar (su Percepción pasiva cuenta para notar lo que pasa)</option>
+      <option value="navegar">Navegar</option><option value="cartografiar">Cartografiar</option><option value="rastrear">Rastrear</option>
+      <option value="forrajear">Forrajear comida y agua (ritmo normal o lento)</option>
+      <option value="juntar_lena">Juntar leña (si el camino pasa por terreno con madera)</option></select></label>
     <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ver qué cuesta llegar.</div>
     <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
     <button id="irPiso" disabled>Confirmar la marcha</button>
@@ -267,6 +272,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="eyebrow" style="margin-top:14px">Descansar</div>
     <div class="estado" id="infoDescanso"></div>
     <div id="dadosDescanso"></div>
+    <label class="check"><input type="checkbox" id="fogataDescanso"> Encender una fogata (gasta leña para una noche)</label>
     <button class="sec" id="descansoCorto">Confirmar descanso corto (1 hora)</button>
     <button class="sec" id="descansoLargo">Confirmar descanso largo (8 horas)</button>
     <div class="estado" id="estadoPiso"></div>
@@ -381,6 +387,7 @@ function preseleccion(){
   const p=piso; if(!p||!selPiso){$("irPiso").disabled=true;return}
   const d=selPiso.split(",").map(Number), t=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1])[2];
   if(selPiso===p.pos.join(",")){$("infoPiso").textContent="Ahí están ahora.";$("irPiso").disabled=true;return}
+  const forr=["forrajear"].includes($("actividadPiso").value)&&$("ritmoPiso").value==="rapido";
   const r=rutaPiso(p,p.pos,d,ritmoDe($("ritmoPiso").value));
   if(!r){$("infoPiso").innerHTML=`${esc(t.replace(/_/g," "))}: por lo que ya vieron no hay camino.`;$("irPiso").disabled=true;return}
   const hoy=p.marcha_hoy||0, total=hoy+r.horas, lim=p.horas_de_marcha;
@@ -393,6 +400,8 @@ function preseleccion(){
   else if(extra.length)lineas.push(`<span style="color:var(--warn)">Pasa de ${lim} horas de marcha: al llegar a las ${lim} se detendrán y podrás decidir si siguen con marcha forzada, con riesgo de agotamiento.</span>`);
   $("irPiso").textContent=yaForzada?"Confirmar la marcha forzada":"Confirmar la marcha";
   if($("ritmoPiso").value==="rapido")lineas.push("A ritmo rápido, −5 a la Percepción pasiva.");
+  if(forr)lineas.push("A ritmo rápido no se puede forrajear.");
+  if($("actividadPiso").value!=="vigilar")lineas.push("Mientras no vigila, su Percepción pasiva no cuenta para notar amenazas ni lugares.");
   $("infoPiso").innerHTML=lineas.join("<br>");
   $("irPiso").disabled=false;
 }
@@ -408,8 +417,9 @@ function pintarPiso(p){
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
   $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
   infoBuscar(); pintarDescanso(p);
+  if(!actividadTocada)$("actividadPiso").value=p.actividad_shalock||"vigilar";
   const pr=p.provisiones||{reserva:{},luz:{}}, r=pr.reserva, l=pr.luz||{};
-  $("provPiso").innerHTML=`Provisiones: ${r.raciones??0} raciones · ${r.agua_galones??0} galones de agua · ${r.antorchas??0} antorchas · ${r.aceite_pintas??0} pintas de aceite · ${r.velas??0} velas`
+  $("provPiso").innerHTML=`Provisiones: ${r.raciones??0} raciones · ${r.agua_galones??0} galones de agua · ${r.antorchas??0} antorchas · ${r.aceite_pintas??0} pintas de aceite · ${r.velas??0} velas · ${r.lena??0} de leña${r.lena_mojada?` (+${r.lena_mojada} mojada)`:""}`
     +`<br>Luz: ${l.fuente?`${l.fuente} ${l.encendida?"encendida":"apagada"} (le quedan ${horasTexto(l.queda_h||0)})`:"ninguna encendida"}`
     +(p.condiciones&&p.condiciones.luz==="oscuridad"?" · el piso está a oscuras":"")
     +(p.shalock&&p.shalock.cansancio?` · agotamiento ${p.shalock.cansancio}`:"");
@@ -430,11 +440,13 @@ async function enviarExploracion(t){
 $("irPiso").addEventListener("click",async()=>{
   if(!piso||!selPiso)return;
   const v=$("ritmoPiso").value;
-  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",forzada:(piso.marcha_hoy||0)>=piso.horas_de_marcha-1e-9,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null}
+  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",forzada:(piso.marcha_hoy||0)>=piso.horas_de_marcha-1e-9,actividad:$("actividadPiso").value,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null;actividadTocada=false}
   catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
 });
 $("ritmoPiso").addEventListener("change",preseleccion);
+let actividadTocada=false;
+$("actividadPiso").addEventListener("change",()=>{actividadTocada=true;preseleccion()});
 $("seguirForzada").addEventListener("click",async()=>{const pf=piso&&piso.pregunta_forzada;if(!pf)return;
   try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:pf.destino,ritmo:pf.ritmo,sigilo:pf.sigilo,forzada:true,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
     $("estadoPiso").textContent="Enviado: siguen con marcha forzada.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
@@ -449,7 +461,7 @@ function pintarDescanso(p){
   $("dadosDescanso").innerHTML=Object.entries(s.dados_de_golpe||{}).map(([dado,n])=>`<label>Dados de golpe ${dado} (te quedan ${n})<select data-dg="${dado}">${Array.from({length:n+1},(_,i)=>`<option value="${i}" ${String(i)===(prev[dado]||"0")?"selected":""}>${i}</option>`).join("")}</select></label>`).join("");
 }
 async function enviarDescanso(clase){
-  const t={tipo:"exploracion",accion:"descansar",clase,texto:$("textoPiso").value.trim()||null,ts:Date.now()};
+  const t={tipo:"exploracion",accion:"descansar",clase,fogata:$("fogataDescanso").checked,texto:$("textoPiso").value.trim()||null,ts:Date.now()};
   if(clase==="corto"){const s=piso.shalock||{mod_con:0}, dadosG={}, totales=[], detalle=[];
     $("dadosDescanso").querySelectorAll("select").forEach(x=>{const n=Number(x.value),caras=Number(x.dataset.dg.slice(1));
       if(n>0)dadosG[x.dataset.dg]=n; for(let i=0;i<n;i++){const v=d(caras);totales.push(Math.max(0,v+s.mod_con));detalle.push(`${x.dataset.dg}: ${v}${s.mod_con>=0?" + ":" − "}${Math.abs(s.mod_con)}`)}});
