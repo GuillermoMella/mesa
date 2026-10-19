@@ -244,6 +244,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 
   <section class="panel" id="panelPiso" hidden>
     <div class="eyebrow" id="tituloPiso">Piso</div>
+    <div class="estado" id="provPiso"></div>
     <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
     <div class="ley-piso" id="leyPiso"></div>
     <div class="sub" id="preguntaForzada" hidden>
@@ -263,6 +264,11 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <label for="horasBuscar">Cuánto tiempo<select id="horasBuscar"><option value="1">Una hora</option><option value="2">Dos horas</option><option value="4">Cuatro horas</option></select></label>
     <div class="estado" id="infoBuscar"></div>
     <button class="sec" id="buscarPiso">Confirmar la búsqueda</button>
+    <div class="eyebrow" style="margin-top:14px">Descansar</div>
+    <div class="estado" id="infoDescanso"></div>
+    <div id="dadosDescanso"></div>
+    <button class="sec" id="descansoCorto">Confirmar descanso corto (1 hora)</button>
+    <button class="sec" id="descansoLargo">Confirmar descanso largo (8 horas)</button>
     <div class="estado" id="estadoPiso"></div>
   </section>
 
@@ -401,7 +407,12 @@ function pintarPiso(p){
   (p.lugares||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r)-R*0.45;svg+=`<polygon points="${X},${Y-5} ${X+5},${Y} ${X},${Y+5} ${X-5},${Y}" class="lugar-piso"><title>${esc(n)}</title></polygon>`});
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
   $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
-  infoBuscar();
+  infoBuscar(); pintarDescanso(p);
+  const pr=p.provisiones||{reserva:{},luz:{}}, r=pr.reserva, l=pr.luz||{};
+  $("provPiso").innerHTML=`Provisiones: ${r.raciones??0} raciones · ${r.agua_galones??0} galones de agua · ${r.antorchas??0} antorchas · ${r.aceite_pintas??0} pintas de aceite · ${r.velas??0} velas`
+    +`<br>Luz: ${l.fuente?`${l.fuente} ${l.encendida?"encendida":"apagada"} (le quedan ${horasTexto(l.queda_h||0)})`:"ninguna encendida"}`
+    +(p.condiciones&&p.condiciones.luz==="oscuridad"?" · el piso está a oscuras":"")
+    +(p.shalock&&p.shalock.cansancio?` · agotamiento ${p.shalock.cansancio}`:"");
   const pf=p.pregunta_forzada; $("preguntaForzada").hidden=!pf;
   if(pf){const r=rutaPiso(p,p.pos,pf.destino.split(",").map(Number),pf.ritmo);
     $("textoForzada").textContent=`Iban hacia ${pf.destino}; les faltan ${r?horasTexto(r.horas):"tramos que ya no ven"}. Seguir es marcha forzada, con riesgo de agotamiento.`}
@@ -430,6 +441,24 @@ $("seguirForzada").addEventListener("click",async()=>{const pf=piso&&piso.pregun
 $("pararForzada").addEventListener("click",async()=>{
   try{await enviarExploracion({tipo:"exploracion",accion:"parar",texto:$("textoPiso").value.trim()||null,ts:Date.now()});
     $("estadoPiso").textContent="Enviado: se detienen aquí.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
+// Descanso corto: los dados de golpe se eligen y se tiran aquí (cada uno + CON, mínimo 0, PHB).
+function pintarDescanso(p){
+  const s=p.shalock||{dados_de_golpe:{},pg:0,pg_max:0,mod_con:0};
+  $("infoDescanso").textContent=`PG ${s.pg}/${s.pg_max}. El largo: todos los PG, la mitad de los dados de golpe, lo que se recupera con descanso largo y un nivel menos de agotamiento si comieron y bebieron; uno cada 24 horas. El corto: lo que se recupera con descanso corto y los dados de golpe que gastes. Si aparece algo mientras descansan, el descanso se interrumpe.`;
+  const prev={};$("dadosDescanso").querySelectorAll("select").forEach(x=>prev[x.dataset.dg]=x.value);
+  $("dadosDescanso").innerHTML=Object.entries(s.dados_de_golpe||{}).map(([dado,n])=>`<label>Dados de golpe ${dado} (te quedan ${n})<select data-dg="${dado}">${Array.from({length:n+1},(_,i)=>`<option value="${i}" ${String(i)===(prev[dado]||"0")?"selected":""}>${i}</option>`).join("")}</select></label>`).join("");
+}
+async function enviarDescanso(clase){
+  const t={tipo:"exploracion",accion:"descansar",clase,texto:$("textoPiso").value.trim()||null,ts:Date.now()};
+  if(clase==="corto"){const s=piso.shalock||{mod_con:0}, dadosG={}, totales=[], detalle=[];
+    $("dadosDescanso").querySelectorAll("select").forEach(x=>{const n=Number(x.value),caras=Number(x.dataset.dg.slice(1));
+      if(n>0)dadosG[x.dataset.dg]=n; for(let i=0;i<n;i++){const v=d(caras);totales.push(Math.max(0,v+s.mod_con));detalle.push(`${x.dataset.dg}: ${v}${s.mod_con>=0?" + ":" − "}${Math.abs(s.mod_con)}`)}});
+    if(totales.length){t.dados_de_golpe={dados:dadosG,totales};$("estadoPiso").textContent=`Dados de golpe: ${detalle.join("; ")} = ${totales.reduce((a,b)=>a+b,0)} PG.`}}
+  try{await enviarExploracion(t);$("estadoPiso").textContent=($("estadoPiso").textContent.startsWith("Dados")?$("estadoPiso").textContent+" ":"")+`Enviado el descanso ${clase}.`;$("textoPiso").value=""}
+  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+}
+$("descansoCorto").addEventListener("click",()=>enviarDescanso("corto"));
+$("descansoLargo").addEventListener("click",()=>enviarDescanso("largo"));
 function infoBuscar(){if(!piso)return;const h=Number($("horasBuscar").value);
   $("infoBuscar").textContent=`Buscan en el hexágono donde están durante ${h===1?"una hora":`${h} horas`}: terminarían a las ${horaTexto(piso.fecha,h)}. No suma horas de marcha.`}
 $("horasBuscar").addEventListener("change",infoBuscar);
