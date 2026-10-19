@@ -131,6 +131,10 @@ select.oculto{display:none}
 .muro-b{stroke:#8a96a8;stroke-width:6;stroke-linecap:round;pointer-events:none}
 .puerta{stroke:#b07a3c;stroke-width:6;stroke-linecap:butt;pointer-events:none}
 .puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
+#mapaPiso{overflow:auto;max-height:62vh;border:1px solid var(--borde,#2a3240);border-radius:10px;background:#05070a;touch-action:pan-x pan-y}
+.hxp{stroke:#0b0e13;stroke-width:1;cursor:pointer}.hxp.rec{stroke:#c9d4e3;stroke-width:1.4;stroke-opacity:.5}.hxp.sel{stroke:var(--acento,#8b7cf6);stroke-width:3}
+.pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
+.ley-piso{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.85rem;margin-top:8px}.ley-piso i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
 .hxt.salida{fill:#6cb6ff;font-size:13px}
 .limite{stroke:var(--bad);stroke-width:3;stroke-dasharray:4 4;stroke-linecap:round;pointer-events:none}
@@ -237,6 +241,18 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="sub" id="panelSubida" hidden></div>
   </section>
 
+  <section class="panel" id="panelPiso" hidden>
+    <div class="eyebrow" id="tituloPiso">Piso</div>
+    <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
+    <div class="ley-piso" id="leyPiso"></div>
+    <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ir hacia allá.</div>
+    <label for="actividadPiso">Cómo avanzan<select id="actividadPiso"></select></label>
+    <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
+    <button id="irPiso" disabled>Ir hacia allá</button>
+    <button class="sec" id="soloTextoPiso">Enviar solo el texto</button>
+    <div class="estado" id="estadoPiso"></div>
+  </section>
+
   <section class="panel pane" id="panelCombate" data-pane="mapa" hidden>
     <div class="orden" id="orden" aria-label="Orden de iniciativa"></div>
     <div id="hogarMapa">
@@ -314,7 +330,58 @@ function pintar(e){
   $("panelPedido").hidden=!pedido;
   pintarCombate(e.combate||null);
   pintarSubida(e.subida||null);
+  pintarPiso(e.combate?null:(e.exploracion||null));
 }
+
+// ---- Exploración de piso (DGT-207, fase 1) ----
+// Solo llega lo visto: terreno de cada hexágono visto, lo recorrido y dónde está la cuadrilla.
+// Hexágonos de techo plano, columnas impares desplazadas (como tools/mapas_pisos.py).
+let piso=null, selPiso=null;
+const NOMBRE_ACT={marcha:"Marcha normal",sigilo:"Con sigilo (más lento, menos encuentros)",busqueda:"Buscando (más encuentros)",acampe:"Acampar",ruido:"Haciendo ruido"};
+function horasAprox(p,desde,hasta){
+  // Dijkstra sobre lo visto, con el coste de marcha de cada terreno (el motor calcula el real).
+  const k=h=>h[0]+","+h[1], terr={}; p.hexes.forEach(([c,r,t])=>terr[c+","+r]=t);
+  const vec=([c,r])=>{const q=c,rr=r-((c-(c&1))>>1);return[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]].map(([dq,dr])=>{const Q=q+dq,R=rr+dr;return[Q,R+((Q-(Q&1))>>1)]})};
+  const dist={[k(desde)]:0}, cola=[[0,desde]];
+  while(cola.length){cola.sort((a,b)=>a[0]-b[0]);const [d,h]=cola.shift();if(k(h)===k(hasta))return d;if(d>dist[k(h)])continue;
+    for(const n of vec(h)){const t=terr[k(n)];if(!t)continue;const m=p.terrenos[t].min;if(m==null)continue;const nd=d+m/60;if(nd<(dist[k(n)]??Infinity)){dist[k(n)]=nd;cola.push([nd,n])}}}
+  return null;
+}
+function pintarPiso(p){
+  piso=p; $("panelPiso").hidden=!p; if(!p)return;
+  $("tituloPiso").textContent=`Piso ${p.piso}`;
+  const R=14, W=Math.sqrt(3)*R, cx=c=>R*1.5*c+R*1.2, cy=(c,r)=>W*(r+0.5*(c&1))+W*0.6;
+  const pts=(c,r)=>[0,1,2,3,4,5].map(i=>{const a=Math.PI/3*i;return(cx(c)+R*Math.cos(a)).toFixed(1)+","+(cy(c,r)+R*Math.sin(a)).toFixed(1)}).join(" ");
+  const rec=new Set(p.recorridos.map(h=>h.join(","))), xs=p.hexes.map(h=>cx(h[0])), ys=p.hexes.map(h=>cy(h[0],h[1]));
+  const x0=Math.min(...xs)-R*1.5, y0=Math.min(...ys)-W, w=Math.max(...xs)-x0+R*1.5, h=Math.max(...ys)-y0+W;
+  let svg=p.hexes.map(([c,r,t])=>`<polygon points="${pts(c,r)}" data-hp="${c},${r}" class="hxp ${rec.has(c+","+r)?"rec":""} ${selPiso===c+","+r?"sel":""}" style="fill:${p.terrenos[t].color}"><title>${esc(t.replace(/_/g," "))}</title></polygon>`).join("");
+  svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
+  $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
+  $("leyPiso").innerHTML=Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
+  const act=$("actividadPiso"), prev=act.value;
+  act.innerHTML=["marcha","sigilo","busqueda","ruido"].filter(a=>p.actividades.includes(a)).map(a=>`<option value="${a}" ${a===prev?"selected":""}>${esc(NOMBRE_ACT[a]||a)}</option>`).join("");
+  $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
+    selPiso=el.dataset.hp; const d=selPiso.split(",").map(Number), t=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1])[2];
+    const hs=horasAprox(p,p.pos,d);
+    $("infoPiso").textContent=selPiso===p.pos.join(",")?"Ahí están ahora.":`${t.replace(/_/g," ")}`+(hs==null?": por lo que viste no hay camino":`: ${Math.round(hs)<=1?"cerca de una hora":`unas ${Math.round(hs)} horas`} de marcha por lo que ya viste`);
+    $("irPiso").disabled=selPiso===p.pos.join(",")||p.terrenos[t].min==null; pintarPiso(p)});
+}
+async function enviarExploracion(t){
+  const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
+  const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"exploración de Shalock",content:b64(JSON.stringify(t))})});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+}
+$("irPiso").addEventListener("click",async()=>{
+  if(!piso||!selPiso)return;
+  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,actividad:$("actividadPiso").value,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true}
+  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+});
+$("soloTextoPiso").addEventListener("click",async()=>{
+  const texto=$("textoPiso").value.trim(); if(!texto){$("estadoPiso").textContent="Escribe primero lo que hace o dice.";return}
+  try{await enviarExploracion({tipo:"exploracion",accion:"texto",texto,ts:Date.now()});$("estadoPiso").textContent="Enviado.";$("textoPiso").value=""}
+  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+});
 
 // ---- Subida de nivel (DGT-208) ----
 // El motor manda, por clase, qué se gana y qué hay que elegir; aquí solo se elige y se envía.
