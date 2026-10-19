@@ -210,6 +210,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section class="panel pane" data-pane="mesa" aria-live="polite">
     <div class="eyebrow">Lo que dice el DM</div>
     <p id="mensaje">Conectando…</p>
+    <div class="sub" id="panelSubida" hidden></div>
   </section>
 
   <section class="panel pane" id="panelCombate" data-pane="mapa" hidden>
@@ -288,6 +289,66 @@ function pintar(e){
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
   $("panelPedido").hidden=!pedido;
   pintarCombate(e.combate||null);
+  pintarSubida(e.subida||null);
+}
+
+// ---- Subida de nivel (DGT-208) ----
+// El motor manda, por clase, qué se gana y qué hay que elegir; aquí solo se elige y se envía.
+let subida=null, sub={clase:null,pg:null,elec:{}}, envioSubida=null;
+const nombreSel={subclase:"Subclase",conjuros:"Conjuros",trucos:"Trucos",invocaciones:"Invocaciones",mejora:"Mejora de característica",elegir:"Elección"};
+function abrirMulti(titulo,de,cantidad,actuales,listo){
+  let marcados=new Set(actuales||[]);
+  const fondo=document.createElement("div");fondo.className="hoja-fondo";
+  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const tit=document.createElement("div");tit.className="eyebrow";hoja.appendChild(tit);
+  const botones=de.map(x=>{const b=document.createElement("button");b.type="button";b.textContent=x;b.onclick=()=>{marcados.has(x)?marcados.delete(x):marcados.size<cantidad&&marcados.add(x);refrescar()};hoja.appendChild(b);return b});
+  const ok=document.createElement("button");ok.type="button";ok.textContent="Listo";ok.onclick=()=>{fondo.remove();listo([...marcados])};hoja.appendChild(ok);
+  const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>fondo.remove();hoja.appendChild(c);
+  function refrescar(){tit.textContent=`${titulo}: ${marcados.size} de ${cantidad}`;botones.forEach(b=>b.className=marcados.has(b.textContent)?"actual":"");ok.disabled=marcados.size!==cantidad}
+  refrescar();fondo.appendChild(hoja);document.body.appendChild(fondo);fondo.addEventListener("click",e=>{if(e.target===fondo)fondo.remove()});
+}
+const CARS_APP=["FUE","DES","CON","INT","SAB","CAR"];
+function completoSel(x){const v=sub.elec;
+  if(x.tipo==="mejora")return !!v.dote||Object.values(v.mejora||{}).reduce((a,b)=>a+b,0)===2;
+  if(x.tipo==="elegir")return !!(v.elegir||{})[x.rasgo];
+  if(x.tipo==="subclase")return !!v.subclase;
+  return (v[x.tipo]||[]).length===x.cantidad}
+function textoSel(x){const v=sub.elec;
+  if(x.tipo==="mejora")return v.dote?`Dote: ${v.dote}`:Object.entries(v.mejora||{}).map(([c,n])=>`${c} +${n}`).join(", ");
+  if(x.tipo==="elegir")return (v.elegir||{})[x.rasgo]||"";
+  if(x.tipo==="subclase")return v.subclase||"";
+  return (v[x.tipo]||[]).join(", ")}
+function pintarSubida(sv){
+  subida=sv;const p=$("panelSubida");p.hidden=!subida;if(!subida)return;
+  const cl=sub.clase&&subida.clases[sub.clase];
+  let h=`<div class="eyebrow">Subir al nivel ${subida.nivel+1} · ${subida.px} PX</div>
+    <button type="button" class="selbtn" id="subClase">${cl?`${esc(cl.nombre)} ${cl.nivel_clase}`:"Elegir clase…"}</button>`;
+  if(cl){
+    h+=`<div class="estado">PG: ${cl.pg.dado} (o ${cl.pg.promedio}) ${cl.pg.mod_con>=0?"+":"−"} ${Math.abs(cl.pg.mod_con)} por CON${sub.pg?` → <b>${sub.pg.valor} + ${cl.pg.mod_con}</b> (${sub.pg.modo})`:""}</div>
+      <div class="fila"><button type="button" class="sec" id="subTirar">Tirar ${cl.pg.dado}</button><button type="button" class="sec" id="subProm">Promedio (${cl.pg.promedio})</button></div>`;
+    if(cl.rasgos.length)h+=`<details><summary class="eyebrow">Rasgos nuevos: ${cl.rasgos.map(r=>esc(r.nombre)).join(", ")}</summary>${cl.rasgos.map(r=>`<p class="estado"><b>${esc(r.nombre)}</b>${r.subclase?` (${esc(r.subclase)})`:""}: ${esc(r.texto)}</p>`).join("")}</details>`;
+    cl.selectores.forEach((x,i)=>{h+=`<button type="button" class="selbtn" data-sel="${i}">${esc(nombreSel[x.tipo]||x.tipo)}${x.rasgo&&x.tipo!=="mejora"?` (${esc(x.rasgo)})`:""}: ${esc(textoSel(x)||`elegir ${x.cantidad}`)}</button>`});
+    const listo=sub.pg&&cl.selectores.every(completoSel);
+    h+=`<button type="button" id="subEnviar" ${listo?"":"disabled"}>Confirmar subida a ${esc(cl.nombre)} ${cl.nivel_clase}</button><div class="estado" id="subEstado"></div>`;
+  }
+  p.innerHTML=h;
+  $("subClase").onclick=()=>abrirHoja("Clase",Object.values(subida.clases).map(c=>({t:`${c.nombre} ${c.nivel_clase}${c.permitido?"":` — no: ${c.motivo||""}`}`,v:c.clase,no:!c.permitido})),v=>{sub={clase:v,pg:null,elec:{}};pintarSubida(subida)});
+  if(!cl)return;
+  $("subTirar").onclick=()=>{const caras=Number(cl.pg.dado.split("d")[1]),n=d(caras);sub.pg={modo:"tirado",valor:n,dados:[n]};pintarSubida(subida)};
+  $("subProm").onclick=()=>{sub.pg={modo:"promedio",valor:cl.pg.promedio,dados:[]};pintarSubida(subida)};
+  p.querySelectorAll("[data-sel]").forEach(b=>b.onclick=()=>{const x=cl.selectores[Number(b.dataset.sel)],v=sub.elec;
+    if(x.tipo==="subclase")abrirHoja("Subclase",x.de.map(n=>({t:n,v:n})),n=>{v.subclase=n;pintarSubida(subida)});
+    else if(x.tipo==="elegir")abrirHoja(x.rasgo,x.de.map(n=>({t:n,v:n})),n=>{v.elegir=Object.assign(v.elegir||{},{[x.rasgo]:n});pintarSubida(subida)});
+    else if(x.tipo==="mejora")abrirHoja("Mejora de característica",[{t:"+2 a una característica",v:"2"},{t:"+1 a dos características",v:"11"},{t:"Una dote",v:"dote"}],modo=>{
+      if(modo==="dote")abrirHoja("Dote",(x.dotes||[]).map(n=>({t:n,v:n})),n=>{v.dote=n;delete v.mejora;pintarSubida(subida)});
+      else abrirMulti(modo==="2"?"Característica (+2)":"Características (+1 cada una)",CARS_APP,modo==="2"?1:2,[],cs=>{v.mejora=Object.fromEntries(cs.map(c=>[c,modo==="2"?2:1]));delete v.dote;pintarSubida(subida)})});
+    else abrirMulti(nombreSel[x.tipo],x.de,x.cantidad,v[x.tipo],l=>{v[x.tipo]=l;pintarSubida(subida)})});
+  const env=$("subEnviar");if(env)env.onclick=async()=>{
+    if(!envioSubida){const ts=Date.now();envioSubida={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"subida",clase:cl.clase,pg_dado:sub.pg.valor,pg_modo:sub.pg.modo,pg_dados:sub.pg.dados,elecciones:sub.elec,ts}}}
+    const est=$("subEstado");est.className="estado";est.textContent="Enviando…";env.disabled=true;
+    try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioSubida.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"subida de nivel",content:b64(JSON.stringify(envioSubida.t))})});
+      if(!r.ok)throw new Error("HTTP "+r.status);envioSubida=null;sub={clase:null,pg:null,elec:{}};est.className="estado ok";est.textContent="Subida enviada: el DM la aplica."}
+    catch(e){env.disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía la misma.`}};
 }
 
 // ---- Pestañas ----
