@@ -562,7 +562,10 @@ function espacios(minimo=1){
 }
 const nivelDe=v=>v==="pacto"?combate.shalock.recursos.pacto.nivel:Number(v||1);
 // Máximo de criaturas según el nivel del espacio (Bendición 3, Heroísmo y Orden 1; +1 por nivel extra).
-const maxObjetivos=(o,p)=>(o.max_base||1)+nivelDe(form.c[`${p}_espacio`])-(o.nivel||1);
+const maxObjetivos=(o,p)=>(o.max_base||1)+(o.por_nivel_objetivos||0)*(nivelDe(form.c[`${p}_espacio`])-(o.nivel||1));
+// «1d8+4» con «1d8» por nivel extra → «3d8+4» a dos niveles más (igual que tools/reglas.py).
+function escalarDados(base,porNivel,extra){const m=/^(\d+)d(\d+)([+-]\d+)?$/.exec(base),q=/^(\d+)d(\d+)$/.exec(porNivel||"");
+  return m&&q&&extra>0?`${Number(m[1])+extra*Number(q[1])}d${m[2]}${m[3]||""}`:base}
 function campos(p,valor){
   if(!valor)return "";
   const s=combate.shalock, h=[];
@@ -594,7 +597,7 @@ function campos(p,valor){
   if(o.caracteristica)h.push(selector(`${p}_car`,["FUE","DES","CON","INT","SAB","CAR"],"Característica (desventaja en sus pruebas)"));
   if(o.prueba){const hb=s.habilidades||{};h.push(selector(`${p}_hab`,Object.entries(hb).map(([k,v])=>({v:k,t:`${k} ${v>=0?"+":""}${v}`})),"Prueba"))}
   if(o.palabra)h.push(`<label>Palabra<input data-k="${p}_palabra" placeholder="Huye, Suelta, Al suelo…"></label>`);
-  if(o.puntos)h.push(`<label>Puntos de la reserva<input type="number" min="1" max="${s.recursos.imposicion}" data-k="${p}_puntos"></label>`);
+  if(o.puntos)h.push(`<label>Puntos de la reserva<input type="number" min="1" max="${s.recursos[o.recurso]}" data-k="${p}_puntos"></label>`);
   return h.join("");
 }
 function restaurar(){document.querySelectorAll("[data-k]").forEach(el=>{const v=form.c[el.dataset.k];if(v===undefined)return;if(el.type==="checkbox")el.checked=v;else el.value=v});document.querySelectorAll("[data-k]").forEach(el=>{if(el.type!=="checkbox"&&form.c[el.dataset.k]===undefined)form.c[el.dataset.k]=el.value})}
@@ -712,8 +715,10 @@ function revisar(){
   const gasto={};
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.espacio){const k=form.c[`${p}_espacio`];if(!k)bloqueos.push(`${o.nombre}: no te quedan espacios de nivel suficiente.`);else gasto[k]=(gasto[k]||0)+1}});
   Object.entries(gasto).forEach(([k,n])=>{const e=k==="pacto"?s.recursos.pacto:s.recursos.espacios[k];if(!e||n>e.restantes)bloqueos.push("No te alcanzan los espacios de conjuro.")});
-  if(ad&&ad.id==="maldicion"&&!s.recursos.maldicion)bloqueos.push("La Maldición ya se usó; vuelve con un descanso.");
-  if(ac&&ac.id==="imposicion"&&!(Number(form.c.ac_puntos)>0&&Number(form.c.ac_puntos)<=s.recursos.imposicion))bloqueos.push("Indica cuántos puntos de la reserva usas.");
+  // Recursos de rasgos (usos o puntos de una reserva), según el dato de cada opción.
+  [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(!o||!o.recurso)return;const quedan=Number(s.recursos[o.recurso])||0;
+    if(o.puntos){const n=Number(form.c[`${p}_puntos`]);if(!(n>0&&n<=quedan))bloqueos.push(`${o.nombre}: indica cuántos puntos usas (te quedan ${quedan}).`)}
+    else if(quedan<1)bloqueos.push(`${o.nombre}: no te quedan usos; vuelven con un descanso.`)});
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&(o.objetivo==="aliados"||o.objetivo==="enemigos")){const lista=o.objetivo==="aliados"?aliados():enemigos(),n=lista.filter(x=>form.c[`${p}_obj_${x}`]).length,max=maxObjetivos(o,p);if(!n||n>max)bloqueos.push(`${o.nombre}: elige de 1 a ${max} criatura(s).`)}});
   if(combate.turno!=="Shalock")bloqueos.push("Espera tu turno: puedes dejarlo armado.");
   const eco=s.economia||{}, vel=s.velocidad||0, usados=eco.movimiento||0, mov=movimientoElegido();
@@ -790,13 +795,18 @@ function tirarTurno(){
   if(ac&&pasos.some(x=>x.tipo==="accion"&&x.extra))ac.extra=true;
   // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
   let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
-  if(ad&&form.orden==="antes"){if(ad.id==="maldicion")maldicion=ad.objetivo;if(ad.id==="maleficio"||ad.id==="mover_maleficio")maleficio=ad.objetivo;if(ad.id==="abrasador")abrasador=ad.nivel||1}
+  // La adicional que va antes y deja un efecto en Shalock (efecto_dueno, del dato) ya cuenta para el ataque.
+  const oa=ad&&ad.tipo==="opcion"?opcion(ad.id):null;
+  if(oa&&oa.efecto_dueno&&form.orden==="antes"){const v={maldicion:ad.objetivo,maleficio:ad.objetivo,abrasador:ad.nivel||1}[oa.efecto_dueno];
+    if(oa.efecto_dueno==="maldicion")maldicion=v;else if(oa.efecto_dueno==="maleficio")maleficio=v;else if(oa.efecto_dueno==="abrasador")abrasador=v}
   if(ac&&ac.tipo==="ataque"){
     const a=ataque(ac.id), ven=!!form.c.ac_ventaja, des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto());
     Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,{maldicion,maleficio,abrasador}));
   }
-  if(ac&&ac.id==="escapar"){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
-  if(ac&&ac.id==="curar")ac.curacion=tirarExpr(`${ac.nivel||1}d8+4`,false,false);
+  // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
+  if(ac&&ac.habilidad){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
+  const oc=ac&&ac.tipo==="opcion"?opcion(ac.id):null;
+  if(oc&&oc.tirada)ac.curacion=tirarExpr(escalarDados(oc.tirada,oc.tirada_por_nivel,(ac.nivel||1)-(oc.nivel||1)),false,false);
   const mv=movimientoElegido().mv;
   // Secuencia en el orden de la lista: «mover:i» apunta a movimientos[i].
   const secuencia=pasos.map(x=>x.tipo==="mover"?(mv.findIndex(m=>m.paso===x.id)>=0?"mover:"+mv.findIndex(m=>m.paso===x.id):null):x.tipo).filter(Boolean);
