@@ -793,15 +793,12 @@ function tirarTurno(){
   const s=combate.shalock, ad=idxDe("adicional")>=0?describir("ad",form.adicional):null, ac=idxDe("accion")>=0?describir("ac",form.accion):null;
   form.orden=ordenAdicional();
   if(ac&&pasos.some(x=>x.tipo==="accion"&&x.extra))ac.extra=true;
-  // Efectos vigentes al momento de la acción: los de antes y la adicional si va antes.
-  let maldicion=s.efectos.maldicion, maleficio=s.efectos.maleficio, abrasador=s.efectos.abrasador||false;
-  // La adicional que va antes y deja un efecto en Shalock (efecto_dueno, del dato) ya cuenta para el ataque.
+  // La adicional que va antes de la acción ya cuenta para el ataque (lo que su dato dice que suma al impactar).
   const oa=ad&&ad.tipo==="opcion"?opcion(ad.id):null;
-  if(oa&&oa.efecto_dueno&&form.orden==="antes"){const v={maldicion:ad.objetivo,maleficio:ad.objetivo,abrasador:ad.nivel||1}[oa.efecto_dueno];
-    if(oa.efecto_dueno==="maldicion")maldicion=v;else if(oa.efecto_dueno==="maleficio")maleficio=v;else if(oa.efecto_dueno==="abrasador")abrasador=v}
+  const previa=oa&&oa.al_impactar_si_lanza&&form.orden==="antes"?{datos:oa.al_impactar_si_lanza,objetivo:ad.objetivo,nivel:ad.nivel||1}:null;
   if(ac&&ac.tipo==="ataque"){
     const a=ataque(ac.id), ven=!!form.c.ac_ventaja, des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto());
-    Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,{maldicion,maleficio,abrasador}));
+    Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,impactosPara(form.c.ac_objetivo,previa)));
   }
   // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
   if(ac&&ac.habilidad){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
@@ -814,12 +811,21 @@ function tirarTurno(){
 }
 
 // Paso 1: solo el d20. El vigilante del PC devuelve el veredicto sin mostrar la CA.
+function impactosPara(obj,previa){
+  const ai=combate.shalock.al_impactar||{objetivos:{},siempre:[],opcionales:[]}, o=ai.objetivos[obj]||{extras:[]};
+  const extras=[...(ai.siempre||[]),...o.extras]; let critico_desde=o.critico_desde||20;
+  if(previa){const p=previa.datos;
+    const conNivel=x=>x.multiplicar_por_nivel?Object.assign({},x,{dados:x.dados.replace(/^(\d+)d/,(m,n)=>`${Number(n)*previa.nivel}d`)}):x;
+    if(p.a==="dueno")extras.push(...p.extras.map(conNivel));
+    else if(previa.objetivo===obj){extras.push(...p.extras.map(conNivel));if(p.critico_desde)critico_desde=Math.min(critico_desde,p.critico_desde)}}
+  return{extras,critico_desde};
+}
 function tirarAtaque(id,obj,modo,ef){
   const s=combate.shalock, a=ataque(id);
   const d20=modo?[d(20),d(20)]:[d(20)], natural=modo==="ventaja"?Math.max(...d20):modo==="desventaja"?Math.min(...d20):d20[0];
   const bend=s.efectos.bendecido?d(4):0;
   return{tipo:"ataque",fase:"ataque",id,accion:a.nombre,clase:a.clase,objetivo:obj,d20,natural,bono:a.bono,bendicion:bend,
-         total:natural+a.bono+bend,modo,critico_desde:ef.maldicion===obj?19:20,efectos:ef};
+         total:natural+a.bono+bend,modo,critico_desde:ef.critico_desde||20,efectos:ef};
 }
 let enCurso=null; // ataque esperando veredicto o daño
 try{enCurso=JSON.parse(localStorage.getItem("mesa_en_curso")||"null")}catch(e){}
@@ -834,21 +840,29 @@ function pintarDano(){
   $("veredicto").textContent=`${enCurso.accion} contra ${enCurso.objetivo}: `+(v.critico?"¡CRÍTICO!":v.impacta?"impactas.":"fallas.")+(v.reaccion?` ${v.reaccion}.`:"");
   $("opcDano").hidden=!v.impacta;
   const a=ataque(enCurso.id), esp=espacios();
-  $("lblCastigoDano").hidden=!(a&&a.castigo&&esp.length);
-  $("espCastigo").innerHTML=esp.map(x=>`<option value="${x.v}">${esc(x.t)} → ${Math.min(5,1+nivelDe(x.v))}d8</option>`).join("");
+  const op=opcionalImpacto(a);
+  $("lblCastigoDano").hidden=!(op&&esp.length);
+  if(op){$("lblCastigoDano").lastChild.textContent=` ${op.nombre} (${op.dados} ${op.tipo})`;
+    $("espCastigo").innerHTML=esp.map(x=>`<option value="${x.v}">${esc(x.t)} → ${dadosOpcional(op,nivelDe(x.v))}</option>`).join("")}
   if(!v.impacta)$("cerrarDano").hidden=false;
 }
+// Lo opcional que se decide al impactar con un arma cuerpo a cuerpo (Castigo divino): dados según el espacio.
+const opcionalImpacto=a=>a&&a.clase==="arma"?((combate.shalock.al_impactar||{}).opcionales||[]).find(o=>o.coste==="espacio"):null;
+function dadosOpcional(op,nivel){const m=/^(\d+)d(\d+)$/.exec(op.dados),q=/^(\d+)d/.exec(op.por_nivel||"0d");
+  const n=Math.min(op.max_dados||99,Number(m[1])+Number(q[1])*(nivel-1));return`${n}d${m[2]}`}
 $("cerrarDano").onclick=()=>{enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;pintarDano()};
 $("tirarDano").addEventListener("click",async()=>{
   const v=combate.resolucion, a=ataque(enCurso.id), ef=enCurso.efectos||{}, crit=!!v.critico, obj=enCurso.objetivo;
   if(!enCurso.dano){
     const danos=[Object.assign(tirarExpr(a.dano,crit,a.gwf),{tipo:a.tipo_dano})];
-    if(ef.maldicion===obj)danos.push({expresion:"+2",dados:[],total:2,tipo:a.tipo_dano+" (Maldición)"});
-    if(ef.maleficio===obj)danos.push(Object.assign(tirarExpr("1d6",crit,a.gwf),{tipo:"necrótico"}));
-    if(ef.abrasador&&a.clase==="arma")danos.push(Object.assign(tirarExpr(`${Number(ef.abrasador)||1}d6`,crit,a.gwf),{tipo:"fuego (Castigo abrasador)"}));
-    const castigo=a.castigo&&$("castigoDano").checked&&!$("lblCastigoDano").hidden;
+    // Lo que suman los estados de Shalock (Maleficio, Maldición, Castigo abrasador…), según el dato de cada uno.
+    (ef.extras||[]).forEach(x=>{if(x.solo_arma_cc&&a.clase!=="arma")return;
+      const tipo=`${x.tipo==="del_arma"?a.tipo_dano:x.tipo} (${x.nombre})`;
+      if(x.dados)danos.push(Object.assign(tirarExpr(x.dados,crit,a.gwf),{tipo,fuente:x.fuente}));
+      else{const v=x.valor==="competencia"?Number(combate.shalock.competencia||2):Number(x.valor)||0;danos.push({expresion:"+"+v,dados:[],total:v,tipo,fuente:x.fuente})}});
+    const op=opcionalImpacto(a), castigo=!!op&&$("castigoDano").checked&&!$("lblCastigoDano").hidden;
     // Castigo divino: 2d8 con espacio de nivel 1, +1d8 por nivel, máximo 5d8.
-    if(castigo)danos.push(Object.assign(tirarExpr(`${Math.min(5,1+nivelDe($("espCastigo").value))}d8`,crit,a.gwf),{tipo:"radiante (Castigo divino)"}));
+    if(castigo)danos.push(Object.assign(tirarExpr(dadosOpcional(op,nivelDe($("espCastigo").value)),crit,a.gwf),{tipo:`${op.tipo} (${op.nombre})`,fuente:op.id}));
     const ts=Date.now();
     enCurso.dano={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"dano",ref:enCurso.tirada,accion:a.nombre,objetivo:obj,critico:crit,castigo,espacio_castigo:castigo?$("espCastigo").value:null,danos,ts}};
     guardarEnCurso();
@@ -881,7 +895,7 @@ async function enviarReaccion(t){
 }
 $("atacarReaccion").addEventListener("click",async()=>{
   const s=combate.shalock, rp=combate.reaccion_pendiente;
-  const atq=tirarAtaque($("armaReaccion").value,rp.objetivo,null,{maldicion:s.efectos.maldicion,maleficio:s.efectos.maleficio,abrasador:false});
+  const atq=tirarAtaque($("armaReaccion").value,rp.objetivo,null,impactosPara(rp.objetivo,null));
   try{const id=await enviarReaccion({tipo:"reaccion",ataque:atq,preparada:rp.tipo==="preparada",ts:Date.now()});enCurso=Object.assign({tirada:id+".json"},atq);guardarEnCurso();$("panelReaccion").hidden=true;pintarDano()}
   catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}
 });
