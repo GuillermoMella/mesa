@@ -133,6 +133,7 @@ select.oculto{display:none}
 .puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
 .abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
 .hxt.salida{fill:#6cb6ff;font-size:13px}
+.limite{stroke:var(--bad);stroke-width:3;stroke-dasharray:4 4;stroke-linecap:round;pointer-events:none}
 .sim{font-size:9px;text-anchor:middle;pointer-events:none;opacity:.75}
 .sim.luz{fill:var(--warn)} .sim.tenue{fill:var(--muted)} .sim.osc{fill:#c9d1d9;opacity:.45} .sim.magica{fill:#b9a8ff;opacity:.9}
 .leyenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.8rem;color:var(--muted);margin-top:6px}
@@ -601,6 +602,7 @@ function pintarMapa(){
   const lado=(a,b)=>{const A=pts(a).split(" ").map(p=>p.split(",").map(Number)),Bp=pts(b).split(" ").map(p=>p.split(",").map(Number));
     return A.filter(p=>Bp.some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<0.6))};
   (m.abiertos||[]).forEach(([a,b])=>{const s=lado(a,b);if(s.length===2)svg+=`<line x1="${s[0][0]}" y1="${s[0][1]}" x2="${s[1][0]}" y2="${s[1][1]}" class="abierto"><title>el lugar sigue por aquí</title></line>`});
+  (m.limite||[]).forEach(([a,b])=>{const s=lado(a,b);if(s.length===2)svg+=`<line x1="${s[0][0]}" y1="${s[0][1]}" x2="${s[1][0]}" y2="${s[1][1]}" class="limite"><title>borde del combate: cruzarlo es salir</title></line>`});
   (m.salidas||[]).forEach(h=>{svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt salida">⇲<title>salida del lugar</title></text>`});
   (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{
     if(z.oscuridad)svg+=`<polygon points="${pts(h)}" class="zona-osc"/><polygon points="${pts(h)}" class="zona-osc-raya"><title>${esc(z.nombre)}</title></polygon><text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim magica">✦</text>`;
@@ -639,6 +641,7 @@ function pintarMapa(){
   if(tiene("#"))L.push(`<span>${cuadro("var(--hex-muro)")}muro (no se pasa ni se ve)</span>`);
   if(tiene("P")||tiene("p"))L.push(`<span><i style="border:0;background:none;color:#b07a3c">▬</i>puerta en el hexágono (llena: cerrada; punteada: abierta)</span>`);
   if((m.abiertos||[]).length)L.push(`<span><i style="border:0;background:none;color:#6cb6ff">┄</i>el lugar sigue (no es pared)</span>`);
+  if((m.limite||[]).length)L.push(`<span><i style="border:0;background:none;color:var(--bad)">┄</i>borde del combate: quien lo cruza sale</span>`);
   if((m.salidas||[]).length)L.push(`<span><i style="border:0;background:none;color:#6cb6ff">⇲</i>salida del lugar</span>`);
   if((m.zonas||[]).some(z=>z.dificil))L.push(`<span>${cuadro("rgba(227,179,65,.3)")}terreno difícil de un conjuro</span>`);
   if(presentes.has("brillante"))L.push(`<span><i style="color:var(--warn)">☀</i>luz</span>`);
