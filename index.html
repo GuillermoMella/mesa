@@ -133,6 +133,7 @@ select.oculto{display:none}
 .puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
 #mapaPiso{overflow:auto;max-height:62vh;border:1px solid var(--borde,#2a3240);border-radius:10px;background:#05070a;touch-action:pan-x pan-y}
 .hxp{stroke:#0b0e13;stroke-width:1;cursor:pointer}.hxp.rec{stroke:#c9d4e3;stroke-width:1.4;stroke-opacity:.5}.hxp.sel{stroke:var(--acento,#8b7cf6);stroke-width:3}
+.lugar-piso{fill:#f2d06b;stroke:#0b0e13;stroke-width:1.2;pointer-events:none}
 .pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
 .ley-piso{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.85rem;margin-top:8px}.ley-piso i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
@@ -252,6 +253,10 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
     <button id="irPiso" disabled>Confirmar la marcha</button>
     <button class="sec" id="soloTextoPiso">Enviar solo el texto</button>
+    <div class="eyebrow" style="margin-top:14px">Buscar donde están</div>
+    <label for="horasBuscar">Cuánto tiempo<select id="horasBuscar"><option value="1">Una hora</option><option value="2">Dos horas</option><option value="4">Cuatro horas</option></select></label>
+    <div class="estado" id="infoBuscar"></div>
+    <button class="sec" id="buscarPiso">Confirmar la búsqueda</button>
     <div class="estado" id="estadoPiso"></div>
   </section>
 
@@ -384,9 +389,11 @@ function pintarPiso(p){
   const rec=new Set(p.recorridos.map(h=>h.join(","))), xs=p.hexes.map(h=>cx(h[0])), ys=p.hexes.map(h=>cy(h[0],h[1]));
   const x0=Math.min(...xs)-R*1.5, y0=Math.min(...ys)-W, w=Math.max(...xs)-x0+R*1.5, h=Math.max(...ys)-y0+W;
   let svg=p.hexes.map(([c,r,t])=>`<polygon points="${pts(c,r)}" data-hp="${c},${r}" class="hxp ${rec.has(c+","+r)?"rec":""} ${selPiso===c+","+r?"sel":""}" style="fill:${p.terrenos[t].color}"><title>${esc(t.replace(/_/g," "))}</title></polygon>`).join("");
+  (p.lugares||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r)-R*0.45;svg+=`<polygon points="${X},${Y-5} ${X+5},${Y} ${X},${Y+5} ${X-5},${Y}" class="lugar-piso"><title>${esc(n)}</title></polygon>`});
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
   $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
-  $("leyPiso").innerHTML=Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
+  infoBuscar();
+  $("leyPiso").innerHTML=((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugar que ya conocen</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
 
   $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
     selPiso=el.dataset.hp; pintarPiso(p)});
@@ -405,6 +412,14 @@ $("irPiso").addEventListener("click",async()=>{
   catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
 });
 $("ritmoPiso").addEventListener("change",preseleccion);
+function infoBuscar(){if(!piso)return;const h=Number($("horasBuscar").value);
+  $("infoBuscar").textContent=`Buscan en el hexágono donde están durante ${h===1?"una hora":`${h} horas`}: terminarían a las ${horaTexto(piso.fecha,h)}. No suma horas de marcha.`}
+$("horasBuscar").addEventListener("change",infoBuscar);
+$("buscarPiso").addEventListener("click",async()=>{
+  try{await enviarExploracion({tipo:"exploracion",accion:"buscar",horas:Number($("horasBuscar").value),texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado. El DM narra la búsqueda.";$("textoPiso").value=""}
+  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+});
 $("soloTextoPiso").addEventListener("click",async()=>{
   const texto=$("textoPiso").value.trim(); if(!texto){$("estadoPiso").textContent="Escribe primero lo que hace o dice.";return}
   try{await enviarExploracion({tipo:"exploracion",accion:"texto",texto,ts:Date.now()});$("estadoPiso").textContent="Enviado.";$("textoPiso").value=""}
