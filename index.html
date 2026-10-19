@@ -131,6 +131,8 @@ select.oculto{display:none}
 .muro-b{stroke:#8a96a8;stroke-width:6;stroke-linecap:round;pointer-events:none}
 .puerta{stroke:#b07a3c;stroke-width:6;stroke-linecap:butt;pointer-events:none}
 .puerta.abierta{stroke-dasharray:2 7;stroke-width:4}
+.abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
+.hxt.salida{fill:#6cb6ff;font-size:13px}
 .sim{font-size:9px;text-anchor:middle;pointer-events:none;opacity:.75}
 .sim.luz{fill:var(--warn)} .sim.tenue{fill:var(--muted)} .sim.osc{fill:#c9d1d9;opacity:.45} .sim.magica{fill:#b9a8ff;opacity:.9}
 .leyenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.8rem;color:var(--muted);margin-top:6px}
@@ -444,7 +446,7 @@ document.addEventListener("change",e=>{if(e.target.tagName==="SELECT")mejorarSel
 
 // ---- Mapa de hexágonos (DGT-205) ----
 // Filas «odd-r»: las impares van corridas medio hexágono. 5 pies por paso, 10 en terreno difícil.
-const HX={dificil:"~wo",bloquea:"#xO ?"};
+const HX={dificil:"~wo",bloquea:"#xO ?P"};
 // Bordes entre dos hexágonos (objetos chicos: baranda, muro bajo, pilar, barril): cobertura y, si «dificil», cruzarlos cuesta doble.
 const claveBorde=(a,b)=>[k(a),k(b)].sort().join("|");
 const bordesIdx=()=>{const m={};((combate&&combate.mapa&&combate.mapa.bordes)||[]).forEach(b=>m[claveBorde(b.entre[0],b.entre[1])]=b);return m};
@@ -469,7 +471,7 @@ function deCubo(q,r,s){let rq=Math.round(q),rr=Math.round(r),rs=Math.round(s);co
 function coberturaHex(f,a,b,ocupadas=[]){const n=distHex(a,b),A=aCubo(a),B=aCubo(b),cs=[],hs=[];
   for(let i=1;i<n;i++){const t=i/n,h=deCubo(A[0]+(B[0]-A[0])*t+1e-6,A[1]+(B[1]-A[1])*t+2e-6,A[2]+(B[2]-A[2])*t-3e-6);hs.push(k(h));cs.push(celdaHex(f,h))}
   const tapa=ocupadas.some(o=>hs.includes(k(o)));
-  if(cs.includes("#"))return null;
+  if(cs.includes("#")||cs.includes("P"))return null;
   let mejor=cs.includes("O")?5:(cs.includes("o")||tapa)?2:0;
   // Bordes que cruza la línea, salvo el pegado al atacante (su propio parapeto).
   const BI=bordesIdx(),seq=[k(a),...hs,k(b)];
@@ -556,7 +558,7 @@ function pintarMapa(){
   const cb=combate, m=cb&&cb.mapa; $("panelMapa").hidden=!m; if(!m)return;
   const f=m.filas, R=17, W=Math.sqrt(3)*R, cols=Math.max(...f.map(r=>r.length));
   const cx=([x,y])=>W*(x+0.5*(y&1))+W/2, cy=([x,y])=>1.5*R*y+R;
-  const color={".":"var(--hex-suelo)","#":"var(--hex-muro)","~":"var(--hex-dificil)","w":"var(--hex-agua)","o":"var(--hex-cob)","O":"var(--hex-cob)"};
+  const color={".":"var(--hex-suelo)","#":"var(--hex-muro)","~":"var(--hex-dificil)","w":"var(--hex-agua)","o":"var(--hex-cob)","O":"var(--hex-cob)","P":"var(--hex-muro)","p":"var(--hex-suelo)"};
   const tuyo=cb.turno==="Shalock", yo=yoPos();
   let alc={coste:{}};
   if(tuyo&&yo&&tramo()){const hos=cb.combatientes.filter(c=>c.bando==="enemigo"&&c.activo&&c.pos).map(c=>c.pos),ali=cb.combatientes.filter(c=>c.pos&&!c.es_pj&&(c.bando==="cuadrilla"||!c.activo)).map(c=>c.pos);
@@ -574,6 +576,7 @@ function pintarMapa(){
     const alcanza=!oA&&alc.coste[k(h)]!==undefined&&k(h)!==k(ori||[-1,-1]);
     svg+=`<polygon points="${pts(h)}" data-h="${x},${y}" class="hx ${alcanza?"alcanza":""} ${apuntable(h)?"apunta":""} ${ruta.has(k(h))?"ruta":""}" style="fill:${color[ch]||color["."]}"/>`;
     if(ch==="o"||ch==="O")svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt">${ch==="O"?"▲":"△"}</text>`;
+    if(ch==="P"||ch==="p")svg+=`<line x1="${cx(h)-R*0.55}" y1="${cy(h)}" x2="${cx(h)+R*0.55}" y2="${cy(h)}" class="puerta ${ch==="p"?"abierta":""}"><title>puerta ${ch==="p"?"abierta":"cerrada"}</title></line>`;
     if(vis&&!vis.has(k(h)))svg+=`<polygon points="${pts(h)}" class="recuerdo"><title>lo viste antes; ahora no lo ves</title></polygon>`}));
   // Luz: el ambiente oscurece todo salvo lo que alumbran las fuentes (antorchas…); la oscuridad mágica va encima,
   // rayada en violeta para no confundirla con la natural. Cada hexágono lleva su símbolo: ☀ ◐ ● ✦.
@@ -595,6 +598,10 @@ function pintarMapa(){
       svg+=b.abierta?ln("puerta abierta","puerta abierta"):ln("puerta","puerta cerrada")}
     else if(b.cobertura==="total")svg+=ln("muro-b","muro");
     else svg+=ln(`borde b${b.cobertura} ${b.paso==="dificil"?"dif":""}`,`${b.cobertura===5?"tres cuartos":"cobertura media"}${b.paso==="dificil"?", cruzarlo cuesta doble":""}`)});
+  const lado=(a,b)=>{const A=pts(a).split(" ").map(p=>p.split(",").map(Number)),Bp=pts(b).split(" ").map(p=>p.split(",").map(Number));
+    return A.filter(p=>Bp.some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<0.6))};
+  (m.abiertos||[]).forEach(([a,b])=>{const s=lado(a,b);if(s.length===2)svg+=`<line x1="${s[0][0]}" y1="${s[0][1]}" x2="${s[1][0]}" y2="${s[1][1]}" class="abierto"><title>el lugar sigue por aquí</title></line>`});
+  (m.salidas||[]).forEach(h=>{svg+=`<text x="${cx(h)}" y="${cy(h)+4}" class="hxt salida">⇲<title>salida del lugar</title></text>`});
   (m.zonas||[]).filter(z=>!z.luz).forEach(z=>z.hexes.forEach(h=>{
     if(z.oscuridad)svg+=`<polygon points="${pts(h)}" class="zona-osc"/><polygon points="${pts(h)}" class="zona-osc-raya"><title>${esc(z.nombre)}</title></polygon><text x="${cx(h)+R*0.5}" y="${cy(h)-R*0.35}" class="sim magica">✦</text>`;
     else svg+=`<polygon points="${pts(h)}" class="zona-dif"><title>${esc(z.nombre)}</title></polygon>`}));
@@ -604,13 +611,15 @@ function pintarMapa(){
     const oye=c.percibido==="oyes";
     svg+=`<g class="ficha ${cls} ${c.activo?"":"caida"} ${c.id===cb.turno?"turno":""} ${oye?"fantasma":""}"><circle cx="${cx(h)}" cy="${cy(h)}" r="${R*0.62}"/><text x="${cx(h)}" y="${cy(h)+4}">${oye?"?":esc(ini)}</text><title>${esc(c.id)}${oye?" (no lo ves; lo oyes ahí)":""}</title></g>`});
   movers().forEach((x,i)=>{const m=movMapa[x.id];if(m)svg+=`<circle cx="${cx(m.destino)}" cy="${cy(m.destino)}" r="${R*0.35}" class="destino"/><text x="${cx(m.destino)}" y="${cy(m.destino)-R*0.45}" class="hxt">${i+1}</text>`});
-  const w=W*(cols+0.5)+2,h=1.5*R*f.length+R/2+2;
-  geoMapa={w,h,cx,cy};
+  const usadas=[];f.forEach((fila,y)=>[...fila].forEach((ch,x)=>{if(ch!=="x"&&ch!==" ")usadas.push([x,y])}));
+  const ox=usadas.length?Math.max(0,Math.min(...usadas.map(cx))-W/2-1):0, oy=usadas.length?Math.max(0,Math.min(...usadas.map(cy))-R-1):0;
+  const w=(usadas.length?Math.max(...usadas.map(cx))+W/2+1:W*(cols+0.5)+2)-ox,h=(usadas.length?Math.max(...usadas.map(cy))+R+1:1.5*R*f.length+R/2+2)-oy;
+  geoMapa={w,h,cx:p=>cx(p)-ox,cy:p=>cy(p)-oy};
   const ms=movers();
   $("tramosMapa").innerHTML=tuyo&&ms.length?ms.map((x,i)=>`<button type="button" data-tramo="${x.id}" class="${x.id===tramo()?"activa":""}">Movimiento ${i+1}${movMapa[x.id]?` · ${movMapa[x.id].coste} p`:""}</button>`).join(""):"";
   $("tramosMapa").querySelectorAll("button").forEach(b=>b.onclick=()=>{pasoMapa=b.dataset.tramo;pintarMapa();pintarPasos()});
   const defs=`<defs><pattern id="rayaMagica" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="none"/><line x1="0" y1="0" x2="0" y2="6" stroke="#8b7cf6" stroke-width="2" opacity=".55"/></pattern></defs>`;
-  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${defs}${svg}</svg>`;
+  $("mapa").innerHTML=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*zoomMapa).toFixed(0)}" height="${(h*zoomMapa).toFixed(0)}" role="img" aria-label="Mapa del combate">${defs}<g transform="translate(${(-ox).toFixed(1)},${(-oy).toFixed(1)})">${svg}</g></svg>`;
   // Leyenda: solo lo que aparece en este mapa.
   const tiene=ch=>f.some(fila=>fila.includes(ch)), L=[];
   const cuadro=(fondo,txt="")=>`<i style="background:${fondo}">${txt}</i>`;
@@ -628,6 +637,9 @@ function pintarMapa(){
   if(bs.some(b=>b.cobertura==="total"&&!b.puerta))L.push(`<span><i style="border:0;background:none;color:#8a96a8">┃</i>pared (no se pasa ni se ve)</span>`);
   if(bs.some(b=>b.puerta))L.push(`<span><i style="border:0;background:none;color:#b07a3c">▬</i>puerta (cerrada: como pared; punteada: abierta)</span>`);
   if(tiene("#"))L.push(`<span>${cuadro("var(--hex-muro)")}muro (no se pasa ni se ve)</span>`);
+  if(tiene("P")||tiene("p"))L.push(`<span><i style="border:0;background:none;color:#b07a3c">▬</i>puerta en el hexágono (llena: cerrada; punteada: abierta)</span>`);
+  if((m.abiertos||[]).length)L.push(`<span><i style="border:0;background:none;color:#6cb6ff">┄</i>el lugar sigue (no es pared)</span>`);
+  if((m.salidas||[]).length)L.push(`<span><i style="border:0;background:none;color:#6cb6ff">⇲</i>salida del lugar</span>`);
   if((m.zonas||[]).some(z=>z.dificil))L.push(`<span>${cuadro("rgba(227,179,65,.3)")}terreno difícil de un conjuro</span>`);
   if(presentes.has("brillante"))L.push(`<span><i style="color:var(--warn)">☀</i>luz</span>`);
   if(presentes.has("tenue"))L.push(`<span><i>◐</i>penumbra (se ve)</span>`);
