@@ -843,6 +843,9 @@ function revisar(){
         if(cob===null)bloqueos.push(`No ves a ${obj}: hay un muro en medio.`);else if(cob)avisos.push(`${obj} tiene cobertura (+${cob} a su CA).`)}}
   }
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.area&&dondeDe(p)==="punto"&&!form.c[`${p}_punto`])bloqueos.push(`${o.nombre}: elige el punto en el mapa.`)});
+  // «Una criatura que puedas ver»: el motor dice a quién ves (línea de visión y oscuridad).
+  [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(!o||!o.requiere_ver)return;const objs=(o.objetivo==="aliados"||o.objetivo==="enemigos")?(o.objetivo==="aliados"?aliados():enemigos()).filter(x=>form.c[`${p}_obj_${x}`]):[form.c[`${p}_objetivo`]];
+    objs.filter(Boolean).forEach(n=>{const cc=combate.combatientes.find(x=>x.id===n);if(cc&&cc.lo_ves===false)bloqueos.push(`${o.nombre}: no ves a ${n}, y tiene que ser una criatura que puedas ver.`)})});
   if(!pasos.length&&!mov.mv.length&&!s.turno_abierto)bloqueos.push("Agrega al menos un paso con «+».");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
