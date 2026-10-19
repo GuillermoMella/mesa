@@ -245,10 +245,12 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="eyebrow" id="tituloPiso">Piso</div>
     <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
     <div class="ley-piso" id="leyPiso"></div>
-    <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ir hacia allá.</div>
-    <label for="actividadPiso">Cómo avanzan<select id="actividadPiso"></select></label>
+    <label for="ritmoPiso">Ritmo<select id="ritmoPiso">
+      <option value="rapido">Rápido (−5 a la Percepción pasiva)</option><option value="normal" selected>Normal</option>
+      <option value="lento">Lento</option><option value="sigilo">Lento, con sigilo</option></select></label>
+    <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ver qué cuesta llegar.</div>
     <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
-    <button id="irPiso" disabled>Ir hacia allá</button>
+    <button id="irPiso" disabled>Confirmar la marcha</button>
     <button class="sec" id="soloTextoPiso">Enviar solo el texto</button>
     <div class="estado" id="estadoPiso"></div>
   </section>
@@ -337,15 +339,42 @@ function pintar(e){
 // Solo llega lo visto: terreno de cada hexágono visto, lo recorrido y dónde está la cuadrilla.
 // Hexágonos de techo plano, columnas impares desplazadas (como tools/mapas_pisos.py).
 let piso=null, selPiso=null;
-const NOMBRE_ACT={marcha:"Marcha normal",sigilo:"Con sigilo (más lento, menos encuentros)",busqueda:"Buscando (más encuentros)",acampe:"Acampar",ruido:"Haciendo ruido"};
-function horasAprox(p,desde,hasta){
-  // Dijkstra sobre lo visto, con el coste de marcha de cada terreno (el motor calcula el real).
+// Preselección: la misma ruta que calcula el motor (solo por lo ya visto, nadar y trepar sí, el ritmo
+// multiplica el tiempo) y sus costos: horas, hora de llegada, horas de marcha del día y marcha forzada.
+function rutaPiso(p,desde,hasta,ritmo){
   const k=h=>h[0]+","+h[1], terr={}; p.hexes.forEach(([c,r,t])=>terr[c+","+r]=t);
+  const pasa=t=>t&&p.terrenos[t].min!=null&&(!p.terrenos[t].requiere||p.capacidades.includes(p.terrenos[t].requiere));
   const vec=([c,r])=>{const q=c,rr=r-((c-(c&1))>>1);return[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]].map(([dq,dr])=>{const Q=q+dq,R=rr+dr;return[Q,R+((Q-(Q&1))>>1)]})};
-  const dist={[k(desde)]:0}, cola=[[0,desde]];
-  while(cola.length){cola.sort((a,b)=>a[0]-b[0]);const [d,h]=cola.shift();if(k(h)===k(hasta))return d;if(d>dist[k(h)])continue;
-    for(const n of vec(h)){const t=terr[k(n)];if(!t)continue;const m=p.terrenos[t].min;if(m==null)continue;const nd=d+m/60;if(nd<(dist[k(n)]??Infinity)){dist[k(n)]=nd;cola.push([nd,n])}}}
-  return null;
+  const enl={}; (p.enlaces||[]).forEach(([c1,r1,c2,r2,min,sent,req])=>{if(req&&!p.capacidades.includes(req))return;
+    (enl[c1+","+r1]=enl[c1+","+r1]||[]).push([[c2,r2],min/60]);if(sent==="ambos")(enl[c2+","+r2]=enl[c2+","+r2]||[]).push([[c1,r1],min/60])});
+  const dist={[k(desde)]:0},prev={},cola=[[0,desde]];
+  while(cola.length){cola.sort((a,b)=>a[0]-b[0]);const [d,h]=cola.shift();if(k(h)===k(hasta))break;if(d>dist[k(h)])continue;
+    const pasos=vec(h).filter(n=>pasa(terr[k(n)])).map(n=>[n,p.terrenos[terr[k(n)]].min/60]).concat((enl[k(h)]||[]).filter(([n])=>pasa(terr[k(n)])));
+    for(const [n,c] of pasos){const nd=d+c;if(nd<(dist[k(n)]??Infinity)){dist[k(n)]=nd;prev[k(n)]=h;cola.push([nd,n])}}}
+  if(dist[k(hasta)]==null)return null;
+  const camino=[hasta];while(k(camino[0])!==k(desde))camino.unshift(prev[k(camino[0])]);
+  const f=p.ritmos[ritmo].factor, req=new Set(camino.slice(1).map(h=>p.terrenos[terr[k(h)]].requiere).filter(Boolean));
+  return{horas:dist[k(hasta)]*f,hexes:camino.length-1,requiere:[...req]};
+}
+const ritmoDe=v=>v==="sigilo"?"lento":v;
+function horaTexto(fecha,horas){const m=/T(\d\d):(\d\d)/.exec(fecha);let min=Number(m[1])*60+Number(m[2])+Math.round(horas*60);const dias=Math.floor(min/1440);min%=1440;
+  return `${String(Math.floor(min/60)).padStart(2,"0")}:${String(min%60).padStart(2,"0")}${dias?` (${dias===1?"al día siguiente":`en ${dias} días`})`:""}`}
+const horasTexto=h=>h<0.75?`unos ${Math.max(5,Math.round(h*60/5)*5)} minutos`:Math.round(h)<=1?"cerca de una hora":`unas ${Math.round(h)} horas`;
+function preseleccion(){
+  const p=piso; if(!p||!selPiso){$("irPiso").disabled=true;return}
+  const d=selPiso.split(",").map(Number), t=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1])[2];
+  if(selPiso===p.pos.join(",")){$("infoPiso").textContent="Ahí están ahora.";$("irPiso").disabled=true;return}
+  const r=rutaPiso(p,p.pos,d,ritmoDe($("ritmoPiso").value));
+  if(!r){$("infoPiso").innerHTML=`${esc(t.replace(/_/g," "))}: por lo que ya vieron no hay camino.`;$("irPiso").disabled=true;return}
+  const hoy=p.marcha_hoy||0, total=hoy+r.horas, lim=p.horas_de_marcha;
+  const extra=[];for(let k=lim+1;k<=Math.floor(total+1e-9);k++)if(k>hoy+1e-9)extra.push(k);
+  const lineas=[`<b>${esc(t.replace(/_/g," "))}</b>: ${r.hexes} hexágono${r.hexes===1?"":"s"}, ${horasTexto(r.horas)} de marcha.`,
+    `Llegarían a las ${horaTexto(p.fecha,r.horas)}. ${hoy<0.05?"Hoy todavía no marcharon":`Hoy llevan ${horasTexto(hoy)} de marcha`}; con esto, ${horasTexto(total)} en el día.`];
+  if(r.requiere.length)lineas.push(`En el camino hay que ${r.requiere.join(" y ")}.`);
+  if(extra.length)lineas.push(`<span style="color:var(--warn)">Marcha forzada: pasan de ${lim} horas. Al final de cada hora extra, salvación de Constitución: ${extra.map(k=>`CD ${10+k-lim}`).join(", ")}. Quien falla gana un nivel de agotamiento.</span>`);
+  if($("ritmoPiso").value==="rapido")lineas.push("A ritmo rápido, −5 a la Percepción pasiva.");
+  $("infoPiso").innerHTML=lineas.join("<br>");
+  $("irPiso").disabled=false;
 }
 function pintarPiso(p){
   piso=p; $("panelPiso").hidden=!p; if(!p)return;
@@ -358,13 +387,10 @@ function pintarPiso(p){
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
   $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
   $("leyPiso").innerHTML=Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
-  const act=$("actividadPiso"), prev=act.value;
-  act.innerHTML=["marcha","sigilo","busqueda","ruido"].filter(a=>p.actividades.includes(a)).map(a=>`<option value="${a}" ${a===prev?"selected":""}>${esc(NOMBRE_ACT[a]||a)}</option>`).join("");
+
   $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
-    selPiso=el.dataset.hp; const d=selPiso.split(",").map(Number), t=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1])[2];
-    const hs=horasAprox(p,p.pos,d);
-    $("infoPiso").textContent=selPiso===p.pos.join(",")?"Ahí están ahora.":`${t.replace(/_/g," ")}`+(hs==null?": por lo que viste no hay camino":`: ${Math.round(hs)<=1?"cerca de una hora":`unas ${Math.round(hs)} horas`} de marcha por lo que ya viste`);
-    $("irPiso").disabled=selPiso===p.pos.join(",")||p.terrenos[t].min==null; pintarPiso(p)});
+    selPiso=el.dataset.hp; pintarPiso(p)});
+  preseleccion();
 }
 async function enviarExploracion(t){
   const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
@@ -373,10 +399,12 @@ async function enviarExploracion(t){
 }
 $("irPiso").addEventListener("click",async()=>{
   if(!piso||!selPiso)return;
-  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,actividad:$("actividadPiso").value,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true}
+  const v=$("ritmoPiso").value;
+  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null}
   catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
 });
+$("ritmoPiso").addEventListener("change",preseleccion);
 $("soloTextoPiso").addEventListener("click",async()=>{
   const texto=$("textoPiso").value.trim(); if(!texto){$("estadoPiso").textContent="Escribe primero lo que hace o dice.";return}
   try{await enviarExploracion({tipo:"exploracion",accion:"texto",texto,ts:Date.now()});$("estadoPiso").textContent="Enviado.";$("textoPiso").value=""}
