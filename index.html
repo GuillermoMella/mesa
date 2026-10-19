@@ -246,6 +246,12 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="eyebrow" id="tituloPiso">Piso</div>
     <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
     <div class="ley-piso" id="leyPiso"></div>
+    <div class="sub" id="preguntaForzada" hidden>
+      <div class="eyebrow">Llevan ocho horas de marcha</div>
+      <div id="textoForzada"></div>
+      <button id="seguirForzada">Seguir: marcha forzada</button>
+      <button class="sec" id="pararForzada">Parar aquí</button>
+    </div>
     <label for="ritmoPiso">Ritmo<select id="ritmoPiso">
       <option value="rapido">Rápido (−5 a la Percepción pasiva)</option><option value="normal" selected>Normal</option>
       <option value="lento">Lento</option><option value="sigilo">Lento, con sigilo</option></select></label>
@@ -376,7 +382,10 @@ function preseleccion(){
   const lineas=[`<b>${esc(t.replace(/_/g," "))}</b>: ${r.hexes} hexágono${r.hexes===1?"":"s"}, ${horasTexto(r.horas)} de marcha.`,
     `Llegarían a las ${horaTexto(p.fecha,r.horas)}. ${hoy<0.05?"Hoy todavía no marcharon":`Hoy llevan ${horasTexto(hoy)} de marcha`}; con esto, ${horasTexto(total)} en el día.`];
   if(r.requiere.length)lineas.push(`En el camino hay que ${r.requiere.join(" y ")}.`);
-  if(extra.length)lineas.push(`<span style="color:var(--warn)">Marcha forzada: pasan de ${lim} horas. Al final de cada hora extra, salvación de Constitución: ${extra.map(k=>`CD ${10+k-lim}`).join(", ")}. Quien falla gana un nivel de agotamiento.</span>`);
+  const yaForzada=hoy>=lim-1e-9;
+  if(yaForzada)lineas.push(`<span style="color:var(--warn)">Ya llevan ${lim} horas de marcha: toda esta marcha es forzada, con riesgo de agotamiento.</span>`);
+  else if(extra.length)lineas.push(`<span style="color:var(--warn)">Pasa de ${lim} horas de marcha: al llegar a las ${lim} se detendrán y podrás decidir si siguen con marcha forzada, con riesgo de agotamiento.</span>`);
+  $("irPiso").textContent=yaForzada?"Confirmar la marcha forzada":"Confirmar la marcha";
   if($("ritmoPiso").value==="rapido")lineas.push("A ritmo rápido, −5 a la Percepción pasiva.");
   $("infoPiso").innerHTML=lineas.join("<br>");
   $("irPiso").disabled=false;
@@ -393,6 +402,9 @@ function pintarPiso(p){
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
   $("mapaPiso").innerHTML=`<svg viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${w.toFixed(0)} ${h.toFixed(0)}" width="${(w*1.4).toFixed(0)}" height="${(h*1.4).toFixed(0)}">${svg}</svg>`;
   infoBuscar();
+  const pf=p.pregunta_forzada; $("preguntaForzada").hidden=!pf;
+  if(pf){const r=rutaPiso(p,p.pos,pf.destino.split(",").map(Number),pf.ritmo);
+    $("textoForzada").textContent=`Iban hacia ${pf.destino}; les faltan ${r?horasTexto(r.horas):"tramos que ya no ven"}. Seguir es marcha forzada, con riesgo de agotamiento.`}
   $("leyPiso").innerHTML=((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugar que ya conocen</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
 
   $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
@@ -407,11 +419,17 @@ async function enviarExploracion(t){
 $("irPiso").addEventListener("click",async()=>{
   if(!piso||!selPiso)return;
   const v=$("ritmoPiso").value;
-  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",forzada:(piso.marcha_hoy||0)>=piso.horas_de_marcha-1e-9,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
     $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null}
   catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
 });
 $("ritmoPiso").addEventListener("change",preseleccion);
+$("seguirForzada").addEventListener("click",async()=>{const pf=piso&&piso.pregunta_forzada;if(!pf)return;
+  try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:pf.destino,ritmo:pf.ritmo,sigilo:pf.sigilo,forzada:true,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado: siguen con marcha forzada.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
+$("pararForzada").addEventListener("click",async()=>{
+  try{await enviarExploracion({tipo:"exploracion",accion:"parar",texto:$("textoPiso").value.trim()||null,ts:Date.now()});
+    $("estadoPiso").textContent="Enviado: se detienen aquí.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
 function infoBuscar(){if(!piso)return;const h=Number($("horasBuscar").value);
   $("infoBuscar").textContent=`Buscan en el hexágono donde están durante ${h===1?"una hora":`${h} horas`}: terminarían a las ${horaTexto(piso.fecha,h)}. No suma horas de marcha.`}
 $("horasBuscar").addEventListener("change",infoBuscar);
