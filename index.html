@@ -1108,6 +1108,16 @@ function campos(p,valor){
     h.push(`<label>Pies (si eliges «llegue a…»)<input type="number" min="5" step="5" data-k="${p}_pies" value="5"></label>`);
     return h.join("");
   }
+  if(valor==="com:Ayudar"){
+    // Ayudar (PHB): ventaja en el primer ataque del aliado contra alguien a 5 pies de ti, o en su siguiente prueba.
+    const modo=form.c[`${p}_modo`]||"ataque";
+    h.push(selector(`${p}_aliado`,aliados().filter(a=>a!=="Shalock"),"A quién ayudas"));
+    h.push(selector(`${p}_modo`,[{v:"ataque",t:"En su ataque contra un enemigo"},{v:"prueba",t:"En una prueba"}],"En qué"));
+    if(modo==="ataque")h.push(selector(`${p}_contra`,enemigos(),"Contra quién (a 5 pies o menos de ti)"));
+    else h.push(`<label>Qué tarea<input data-k="${p}_tarea" placeholder="Por ejemplo: forzar la reja"></label>`);
+    h.push(`<div class="estado">Vale hasta el comienzo de tu próximo turno.</div>`);
+    return h.join("");
+  }
   if(valor.startsWith("com:"))return "";
   if(valor.startsWith("atq:")){
     const a=ataque(valor.slice(4));
@@ -1142,7 +1152,7 @@ function restaurar(){document.querySelectorAll("[data-k]").forEach(el=>{const v=
 document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;
   // La acción apunta por defecto al blanco de la acción adicional, salvo que el jugador lo cambie.
   if(k==="ac_objetivo")form.acManual=true;
-  if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio"))pintarCombate(combate);else revisar()});
+  if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio")||k.endsWith("_modo"))pintarCombate(combate);else revisar()});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-apuntar]");if(!b)return;
   apuntando=b.dataset.apuntar;elegirPestana(esPC()?pestana:"turno");pintarMapa();$("panelMapa").scrollIntoView({behavior:"smooth",block:"center"})});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
@@ -1325,6 +1335,8 @@ function describir(p,valor){
     const a=ataque(form.c[`${p}_prep`]||combate.shalock.acciones[0].id), ver=(form.c[`${p}_disp`]||"ver")==="ver";
     return{tipo:"preparar",nombre:"Preparar",ataque:a.id,accion:a.nombre,al_ver:ver,al_alcance:ver?null:Number(form.c[`${p}_pies`]||5),concentracion:a.clase!=="arma"};
   }
+  if(valor==="com:Ayudar"){const modo=form.c[`${p}_modo`]||"ataque";
+    return{tipo:"comun",nombre:"Ayudar",aliado:form.c[`${p}_aliado`],contra:modo==="ataque"?form.c[`${p}_contra`]:null,tarea:modo==="prueba"?(form.c[`${p}_tarea`]||""):null}}
   if(valor.startsWith("com:"))return{tipo:"comun",nombre:valor.slice(4)};
   if(valor.startsWith("atq:"))return{tipo:"ataque",id:valor.slice(4)};
   const o=opcion(valor.slice(3)), x={tipo:"opcion",id:o.id,nombre:o.nombre};
