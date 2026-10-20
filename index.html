@@ -304,6 +304,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <section class="panel urgente" id="panelPedido" hidden>
     <div class="eyebrow">Tirada pedida</div>
     <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
+    <div class="estado" id="porQuePedido" hidden></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
     <button id="tirar" disabled>Tirar y enviar al DM</button>
     <div class="estado" id="estado"></div>
@@ -446,7 +447,10 @@ function pintar(e){
   pedido=e.tirada||null;
   if(pedido){
     $("nombre").textContent=pedido.nombre||"Tirada";
-    $("mod").textContent=(pedido.expresion||"1d20")+" "+fmtMod(Number(pedido.mod)||0);
+    $("mod").textContent=(pedido.expresion||"1d20")+" "+fmtMod(Number(pedido.mod)||0)+(pedido.modo?` con ${pedido.modo}`:"");
+    // Por qué (ventaja de la escena que puso el DM, condiciones); si se anulan, también se dice.
+    const pq=(pedido.por_que||[]).join(" · ");
+    $("porQuePedido").hidden=!pq;$("porQuePedido").textContent=pq+(pq&&!pedido.modo?" → se anulan":"");
     $("tirar").disabled=enviados.has(pedido.id);
     if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
@@ -1347,7 +1351,7 @@ function tirarTurno(){
   if(ac&&ac.tipo==="ataque"){
     const blanco=String(form.c.ac_objetivo).startsWith("@")?{lo_ves:false}:combate.combatientes.find(x=>x.id===form.c.ac_objetivo)||{};
     // PHB: atacar a quien no ves, desventaja; a quien no te ve, ventaja (lo calcula el motor con la oscuridad y la línea de visión).
-    const a=ataque(ac.id), ven=!!form.c.ac_ventaja||blanco.te_ve===false, des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto())||blanco.lo_ves===false;
+    const a=ataque(ac.id), ven=!!form.c.ac_ventaja||blanco.te_ve===false||!!s.ventaja_proxima||(s.ventaja_contra||[]).includes(form.c.ac_objetivo), des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto())||blanco.lo_ves===false;
     Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,impactosPara(form.c.ac_objetivo,previa)));
   }
   // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
@@ -1409,6 +1413,7 @@ $("tirarDano").addEventListener("click",async()=>{
     const danos=[Object.assign(tirarExpr(a.dano,crit,a.gwf),{tipo:a.tipo_dano})];
     // Lo que suman los estados de Shalock (Maleficio, Maldición, Castigo abrasador…), según el dato de cada uno.
     (ef.extras||[]).forEach(x=>{if(x.solo_arma_cc&&a.clase!=="arma")return;
+      if(x.solo_cc&&!(a.etiquetas||[]).some(t=>/_cc$/.test(t)))return; // solo al impactar cuerpo a cuerpo
       const tipo=`${x.tipo==="del_arma"?a.tipo_dano:x.tipo} (${x.nombre})`;
       if(x.dados)danos.push(Object.assign(tirarExpr(x.dados,crit,a.gwf),{tipo,fuente:x.fuente}));
       else{const v=x.valor==="competencia"?Number(combate.shalock.competencia||2):Number(x.valor)||0;danos.push({expresion:"+"+v,dados:[],total:v,tipo,fuente:x.fuente})}});
@@ -1438,10 +1443,16 @@ function pintarReaccion(){
   $("filaAtaqueReaccion").hidden=!(rp.tipo==="preparada"||(rp.opciones||[]).some(o=>o.id==="ataque_de_oportunidad"));
   $("opcionesReaccion").innerHTML=ops.map(o=>{const es=o.nivel>0?espacios(o.nivel):[];
     return `<div class="fila-reaccion">${o.nivel>0?`<label>${esc(o.nombre)} con <select data-espacio-reac="${o.id}">${es.map(e=>`<option value="${e.v}">${esc(e.t)}</option>`).join("")}</select></label>`:`<span>${esc(o.nombre)}</span>`}
-      <button type="button" data-usar-reac="${o.id}" ${o.nivel>0&&!es.length?"disabled":""}>Usar</button></div>`}).join("");
+      <button type="button" data-usar-reac="${o.id}" ${o.nivel>0&&!es.length?"disabled":""}>Usar</button></div>`
+      // Si alcanza a varias criaturas (Caída de pluma): las posibles, marcadas hasta el máximo.
+      +(o.tipos?`<div class="opciones">Contra: ${o.tipos.map((x,i)=>`<label><input type="radio" name="tipo-${o.id}" data-tipo-reac="${o.id}" value="${esc(x)}" ${i===0?"checked":""}> ${esc(x)}</label>`).join("")}</div>`:"")
+      +(o.elegibles?`<div class="estado">Hasta ${o.max} criatura(s).</div><div class="opciones">${o.elegibles.map((x,i)=>`<label><input type="checkbox" data-obj-reac="${o.id}" value="${esc(x)}" ${i<o.max?"checked":""}> ${esc(x)}</label>`).join("")}</div>`:"")}).join("");
   $("opcionesReaccion").querySelectorAll("[data-usar-reac]").forEach(b=>b.onclick=async()=>{
-    const id=b.dataset.usarReac, sel=$("opcionesReaccion").querySelector(`[data-espacio-reac="${id}"]`);
-    try{await enviarReaccion({tipo:"reaccion",ataque:null,opcion:{id,espacio:sel?sel.value:null,objetivos:[rp.objetivo]},ts:Date.now()});$("panelReaccion").hidden=true}
+    const id=b.dataset.usarReac, sel=$("opcionesReaccion").querySelector(`[data-espacio-reac="${id}"]`), o=ops.find(x=>x.id===id);
+    const objs=o&&o.elegibles?[...$("opcionesReaccion").querySelectorAll(`[data-obj-reac="${id}"]:checked`)].map(x=>x.value):[rp.objetivo];
+    if(o&&o.elegibles&&(!objs.length||objs.length>o.max)){$("estadoReaccion").textContent=`Elige entre 1 y ${o.max}.`;return}
+    const tipoSel=$("opcionesReaccion").querySelector(`[data-tipo-reac="${id}"]:checked`);
+    try{await enviarReaccion({tipo:"reaccion",ataque:null,opcion:{id,espacio:sel?sel.value:null,objetivos:objs,tipo_dano:tipoSel?tipoSel.value:null},ts:Date.now()});$("panelReaccion").hidden=true}
     catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}});
   $("lblArmaReaccion").firstChild.textContent=rp.tipo==="preparada"?"Acción preparada: ":"Ataque de oportunidad con";
   const armas=combate.shalock.acciones.filter(a=>rp.tipo==="preparada"?a.id===rp.ataque:a.clase==="arma");
@@ -1541,12 +1552,15 @@ $("tirar").addEventListener("click",async()=>{
   if(!pendiente||pendiente.tirada.pedido!==pedido.id){
     const m=/^(\d*)d(\d+)$/i.exec(pedido.expresion||"1d20")||[0,"1","20"];
     const n=Number(m[1]||1),caras=Number(m[2]),mod=Number(pedido.mod)||0;
-    const dados=Array.from({length:n},()=>d(caras)),ts=Date.now();
-    pendiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,tirada:{pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion||"1d20",dados,mod,total:dados.reduce((a,b)=>a+b,0)+mod,ts}};
+    let dados=Array.from({length:n},()=>d(caras)),descartado=null,ts=Date.now();
+    // Ventaja o desventaja que trae el pedido (DGT-213): dos d20 y se queda el mayor o el menor.
+    if(pedido.modo&&n===1&&caras===20){const otro=d(20),[a,b]=[dados[0],otro];
+      const queda=pedido.modo==="ventaja"?Math.max(a,b):Math.min(a,b);descartado=queda===a?b:a;dados=[queda]}
+    pendiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,tirada:{pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion||"1d20",dados,mod,total:dados.reduce((a,b)=>a+b,0)+mod,modo:pedido.modo||null,descartado,ts}};
     const el=$("dado");el.classList.remove("rueda");void el.offsetWidth;el.classList.add("rueda");
   }
   const {id,tirada}=pendiente,{dados,mod,total}=tirada;
-  $("dado").textContent=dados.join(" · ");$("total").textContent=`${mod>=0?"+":"−"} ${Math.abs(mod)} = ${total}`;$("resultado").hidden=false;
+  $("dado").textContent=dados.join(" · ")+(tirada.descartado!=null?` (y ${tirada.descartado})`:"");$("total").textContent=`${mod>=0?"+":"−"} ${Math.abs(mod)} = ${total}`;$("resultado").hidden=false;
   const est=$("estado");est.className="estado";est.textContent="Enviando…";
   try{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"tirada "+(pedido.nombre||""),content:b64(JSON.stringify(tirada))})});
