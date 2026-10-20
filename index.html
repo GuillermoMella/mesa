@@ -145,6 +145,21 @@ select.oculto{display:none}
   box-shadow:0 14px 50px rgba(0,0,0,.55),inset 0 0 70px rgba(90,60,20,.22);padding:18px 18px 26px;font-family:var(--imprenta)}
 .hp.noche{--papel:#1d1c24;--papel2:#15141b;--tinta:#ece2c8;--tenue:#a99a7c;--linea:#4a4357}
 .hp.pizarra{--papel:#e8ecef;--papel2:#d6dde2;--tinta:#18232e;--tenue:#56677a;--linea:#9fb0bf}
+/* Carmesí sobre negro: papel negro y todo lo escrito en tinta roja. */
+.hp.carmesi{--papel:#0e0b0c;--papel2:#050304;--tinta:#b8121f;--tenue:#8f3a42;--linea:#3b1b1f;--acento:#d01c2a!important;
+  background:radial-gradient(ellipse at 15% 0%,rgba(120,10,20,.18),transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(60,0,8,.35),transparent 60%),
+  repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 2px,transparent 2px 4px),linear-gradient(var(--papel),var(--papel2));
+  box-shadow:0 14px 50px rgba(0,0,0,.7),inset 0 0 90px rgba(0,0,0,.9)}
+.hp.carmesi .hp-caja,.hp.carmesi .hp-escudo{background:rgba(120,10,20,.05)}
+.hp.carmesi .mano{text-shadow:0 0 1px rgba(184,18,31,.85),0 0 6px rgba(184,18,31,.18)}
+.hp.carmesi .hp-punto.si,.hp.carmesi .hp-pips i.lleno{box-shadow:0 0 4px rgba(208,28,42,.55)}
+/* Gotas de tinta: la pluma cargó de más. Cada gota sale de la palabra con un azar fijo. */
+.hp.gotas .mano{position:relative}
+.hp{overflow:hidden}.hoja-pj{overflow-x:hidden}
+.gota{position:absolute;pointer-events:none;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.18),transparent 30%),var(--tinta);
+  border-radius:48% 52% 46% 54% / 55% 50% 50% 45%;opacity:.88}
+.gota.corrida{border-radius:50% 50% 45% 45% / 30% 30% 70% 70%}
+.gota.mancha{background:radial-gradient(circle,var(--tinta) 0,transparent 70%);opacity:.32;filter:blur(1.5px);border-radius:50%}
 .hp .mano{font-family:var(--mano);font-weight:700;color:var(--tinta);letter-spacing:.01em}
 .hp-barra{display:flex;gap:8px;align-items:center;justify-content:flex-end;max-width:1180px;margin:0 auto 10px}
 .hp-barra .eyebrow{margin-right:auto;color:#e6edf3}
@@ -267,7 +282,8 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
     <div class="hp-barra"><span class="eyebrow">Hoja de personaje</span><button class="sec" id="estiloHoja">Estilo</button><button class="sec" id="cerrarHoja">Cerrar</button></div>
     <div class="hp-estilo" id="panelEstiloHoja" hidden>
-      <label>Papel<select id="hpTema"><option value="">Pergamino</option><option value="noche">Tinta nocturna</option><option value="pizarra">Pizarra</option></select></label>
+      <label>Papel<select id="hpTema"><option value="">Pergamino</option><option value="noche">Tinta nocturna</option><option value="pizarra">Pizarra</option><option value="carmesi">Carmesí sobre negro</option></select></label>
+      <label class="check" style="flex:1 1 160px;align-self:end"><input type="checkbox" id="hpGotas"> Gotas de tinta</label>
       <label>Tinta de los títulos<select id="hpAcento"><option value="#8b1e2d">Granate</option><option value="#4f6b3a">Musgo</option><option value="#1f4e79">Azul tinta</option><option value="#a0782c">Oro viejo</option><option value="#5b3a7a">Violeta</option></select></label>
       <label>Letra de lo escrito<select id="hpLetra"><option value='"Caveat",cursive'>Pluma rápida</option><option value='"Kalam",cursive'>Lápiz</option><option value='"Patrick Hand",cursive'>Imprenta a mano</option><option value='"IM Fell English",serif'>Tipografía antigua</option></select></label>
     </div>
@@ -447,11 +463,34 @@ function pintar(e){
 let hojaPJ=null, estiloActual=null;
 const sg=n=>(n>=0?"+":"−")+Math.abs(n);
 function estiloHoja(){let e=estiloActual;if(!e){e={};try{e=JSON.parse(localStorage.getItem("mesa_hoja_estilo")||"{}")}catch(_){};estiloActual=e}
-  const papel=$("papelHoja");papel.className="hp"+(e.tema?" "+e.tema:"");papel.style.setProperty("--acento",e.acento||"#8b1e2d");papel.style.setProperty("--mano",e.letra||'"Caveat",cursive');
+  const gotas=e.gotas??(e.tema==="carmesi");
+  const papel=$("papelHoja");papel.className="hp"+(e.tema?" "+e.tema:"")+(gotas?" gotas":"");$("hpGotas").checked=gotas;papel.style.setProperty("--acento",e.acento||"#8b1e2d");papel.style.setProperty("--mano",e.letra||'"Caveat",cursive');
   $("hpTema").value=e.tema||"";$("hpAcento").value=e.acento||"#8b1e2d";$("hpLetra").value=e.letra||'"Caveat",cursive'}
-function guardarEstiloHoja(){estiloActual={tema:$("hpTema").value,acento:$("hpAcento").value,letra:$("hpLetra").value};
-  try{localStorage.setItem("mesa_hoja_estilo",JSON.stringify(estiloActual))}catch(_){}; estiloHoja()}
-["hpTema","hpAcento","hpLetra"].forEach(id=>$(id).addEventListener("change",guardarEstiloHoja));
+function guardarEstiloHoja(ev){const antes=estiloActual||{};
+  estiloActual={tema:$("hpTema").value,acento:$("hpAcento").value,letra:$("hpLetra").value,
+    // Al elegir el carmesí se encienden las gotas; después cada uno decide.
+    gotas:ev&&ev.target.id==="hpTema"?$("hpTema").value==="carmesi"||(antes.gotas??false):$("hpGotas").checked};
+  try{localStorage.setItem("mesa_hoja_estilo",JSON.stringify(estiloActual))}catch(_){}; pintarHoja()}
+["hpTema","hpAcento","hpLetra","hpGotas"].forEach(id=>$(id).addEventListener("change",guardarEstiloHoja));
+// Azar fijo por palabra: la misma palabra siempre lleva las mismas gotas.
+function azar(semilla){let h=2166136261;for(const ch of semilla){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}
+  return()=>{h^=h<<13;h^=h>>>17;h^=h<<5;return((h>>>0)%10000)/10000}}
+function salpicar(papel){papel.querySelectorAll(".gota").forEach(g=>g.remove());
+  papel.querySelectorAll(".mano").forEach((el,i)=>{const r=azar((el.textContent||"")+"|"+i);
+    if(r()>0.42)return; // no todas las palabras gotean
+    const n=1+Math.floor(r()*3), alto=el.offsetHeight||20, ancho=el.offsetWidth||30;
+    if(r()<0.35){const m=document.createElement("i");m.className="gota mancha";const s=alto*(0.7+r()*0.5);
+      m.style.cssText=`width:${s.toFixed(1)}px;height:${(s*0.8).toFixed(1)}px;left:${(-s*0.25).toFixed(1)}px;top:${(alto*0.15).toFixed(1)}px`;el.appendChild(m)}
+    for(let k=0;k<n;k++){const g=document.createElement("i");const principal=k===0, tam=principal?4+r()*6:1.2+r()*2.4;
+      g.className="gota"+(principal&&r()<0.35?" corrida":"");
+      // La gota grande cae donde la pluma se levantó (al final) o bajo la línea; las chicas la rodean.
+      // La gota grande cae donde se levantó la pluma (tras la última letra) o bajo la línea, sin tapar letras.
+      const alFinal=r()<0.6, x=principal?(alFinal?ancho+1+r()*5:r()*ancho*0.8):ancho*0.5+(r()-0.3)*ancho*0.9,
+        y=principal?(alFinal?alto*(0.45+r()*0.4):alto*(0.88+r()*0.18)):alto*(0.2+r()*0.9);
+      // Salpicaduras diminutas alrededor de la gota grande.
+      const sal=principal?Array.from({length:2+Math.floor(r()*4)},()=>`${((r()-0.5)*tam*3.2).toFixed(1)}px ${((r()-0.5)*tam*3.2).toFixed(1)}px 0 -${(tam*0.32+r()*tam*0.12).toFixed(1)}px var(--tinta)`).join(","):"none";
+      g.style.cssText=`width:${tam.toFixed(1)}px;height:${(tam*(principal&&g.className.includes("corrida")?1.8:0.85+r()*0.3)).toFixed(1)}px;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;transform:rotate(${Math.round(r()*360)}deg);box-shadow:${sal}`;
+      el.appendChild(g)}})}
 $("estiloHoja").addEventListener("click",()=>{$("panelEstiloHoja").hidden=!$("panelEstiloHoja").hidden});
 $("abrirHoja").addEventListener("click",()=>{$("hoja").hidden=false;document.body.style.overflow="hidden";pintarHoja()});
 $("cerrarHoja").addEventListener("click",()=>{$("hoja").hidden=true;document.body.style.overflow=""});
@@ -498,6 +537,7 @@ function pintarHoja(){
       <div class="hp-caja"><div class="hp-tit">Equipo</div><ul class="hp-lista">${h.equipo.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><div class="hp-fila" style="margin-top:4px">Dinero <span class="mano">${h.dinero_mo}</span> po</div></div>
       ${h.personalidad||h.concepto?`<div class="hp-caja"><div class="hp-tit">Quién es</div>${h.concepto?`<p class="hp-texto">${esc(h.concepto)}</p>`:""}${h.personalidad?`<p class="hp-texto">${esc(h.personalidad)}</p>`:""}</div>`:""}</div>
   </div>`;
+  if(P.classList.contains("gotas"))requestAnimationFrame(()=>salpicar(P));
 }
 
 // ---- Exploración de piso (DGT-207, fase 1) ----
