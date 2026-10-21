@@ -225,6 +225,10 @@ select.oculto{display:none}
 .hp-lista{margin:0;padding-left:1.1em;font-family:var(--mano);font-size:1.12rem;line-height:1.3}
 .enlace-piso{stroke:#e8e2d0;stroke-width:2;stroke-dasharray:4 3;pointer-events:none}
 .enlace-nombre{font:600 8px var(--body);fill:#e8e2d0;paint-order:stroke;stroke:#0e1116;stroke-width:3px;pointer-events:none}
+.carga summary{cursor:pointer}.carga-persona{border-top:1px solid var(--line);padding:6px 0}
+.carga-persona summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
+.carga-persona ul{margin:6px 0 0 18px;padding:0;font-size:.85rem;color:var(--muted)}
+.carga-barra{flex:1 1 100%;height:6px;background:var(--line);border-radius:3px;overflow:hidden}.carga-barra i{display:block;height:100%}
 .lugar-nombre{font:600 9px var(--body);fill:#f2d06b;paint-order:stroke;stroke:#0e1116;stroke-width:3px;pointer-events:none}
 .lugar-piso{fill:#f2d06b;stroke:#0b0e13;stroke-width:1.2;pointer-events:none}
 .pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
@@ -411,6 +415,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="provPiso"></div>
     <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
     <div class="ley-piso" id="leyPiso"></div>
+    <details class="carga" id="cargaPiso" hidden><summary class="eyebrow" id="cargaResumen">Carga</summary><div id="cargaDetalle"></div></details>
     <div class="sub" id="preguntaForzada" hidden>
       <div class="eyebrow">Llevan ocho horas de marcha</div>
       <div id="textoForzada"></div>
@@ -657,6 +662,18 @@ function preseleccion(){
   $("infoPiso").innerHTML=lineas.join("<br>");
   $("irPiso").disabled=false;
 }
+// Carga: cuánto lleva cada uno contra su capacidad (FUE × 15 lb) y qué; lo guardado en otros lados, aparte.
+function pintarCarga(c){
+  $("cargaPiso").hidden=!c;if(!c)return;
+  const n=x=>String(Math.round(x*10)/10).replace(".",",");
+  $("cargaResumen").textContent=`Carga: ${n(c.total)} de ${c.capacidad_total} lb`;
+  let h=Object.entries(c.personas).map(([q,d])=>{const pct=Math.min(100,Math.round(100*d.carga/d.capacidad));
+    return `<details class="carga-persona"><summary><b>${esc(q)}</b> ${n(d.carga)} / ${d.capacidad} lb · sobran ${n(d.sobra)}
+      <span class="carga-barra"><i style="width:${pct}%;background:${pct>90?"var(--bad)":pct>75?"var(--warn)":"var(--ok)"}"></i></span></summary>
+      <ul>${d.objetos.filter(o=>o.lb>0||o.cantidad).map(o=>`<li>${esc(o.objeto)}${o.cantidad!==1?` ×${n(o.cantidad)}`:""} — ${n(o.lb)} lb${o.propio?" (propio)":""}</li>`).join("")}</ul></details>`}).join("");
+  if(c.guardados.length)h+=`<div class="estado">Guardado fuera: ${c.guardados.map(g=>`${esc(g.objeto)} (${esc(g.donde)})`).join("; ")}</div>`;
+  if(c.sin_peso.length)h+=`<div class="estado">Sin peso asignado todavía: ${c.sin_peso.map(esc).join("; ")}</div>`;
+  $("cargaDetalle").innerHTML=h}
 function pintarPiso(p){
   piso=p; $("panelPiso").hidden=!p; if(!p)return;
   $("tituloPiso").textContent=`Piso ${p.piso}`;
@@ -675,6 +692,7 @@ function pintarPiso(p){
   infoBuscar(); pintarDescanso(p);
   if(!actividadTocada)$("actividadPiso").value=p.actividad_shalock||"vigilar";
   const pr=p.provisiones||{reserva:{},luz:{}}, r=pr.reserva, l=pr.luz||{};
+  pintarCarga(p.carga);
   $("provPiso").innerHTML=`Provisiones: ${r.raciones??0} raciones · ${r.agua_galones??0} galones de agua · ${r.antorchas??0} antorchas · ${r.aceite_pintas??0} pintas de aceite · ${r.velas??0} velas · ${r.lena??0} de leña${r.lena_mojada?` (+${r.lena_mojada} mojada)`:""}`
     +`<br>Luz: ${l.fuente?`${l.fuente} ${l.encendida?"encendida":"apagada"} (le quedan ${horasTexto(l.queda_h||0)})`:"ninguna encendida"}`
     +(p.condiciones&&p.condiciones.luz==="oscuridad"?" · el piso está a oscuras":"")
@@ -744,7 +762,8 @@ $("soloTextoPiso").addEventListener("click",async()=>{
 // ---- Subida de nivel (DGT-208) ----
 // El motor manda, por clase, qué se gana y qué hay que elegir; aquí solo se elige y se envía.
 let subida=null, sub={clase:null,pg:null,elec:{}}, envioSubida=null;
-const nombreSel={subclase:"Subclase",conjuros:"Conjuros",trucos:"Trucos",invocaciones:"Invocaciones",mejora:"Mejora de característica",elegir:"Elección"};
+const nombreSel={subclase:"Subclase",conjuros:"Conjuros",trucos:"Trucos",invocaciones:"Invocaciones",mejora:"Mejora de característica",elegir:"Elección",
+  reemplazo_conjuro:"Cambiar un conjuro conocido (opcional)",reemplazo_invocacion:"Cambiar una invocación (opcional)"};
 // ---- Listas desplegables ----
 // Una lista se abre en su lugar, debajo del botón que la pidió, y empuja hacia abajo lo que sigue (como una sección
 // que se expande); apretar de nuevo el botón, Cancelar, Escape o tocar fuera la cierra. Las cadenas (conjuro →
@@ -788,11 +807,13 @@ function abrirMulti(titulo,de,cantidad,actuales,listo){
 }
 const CARS_APP=["FUE","DES","CON","INT","SAB","CAR"];
 function completoSel(x){const v=sub.elec;
+  if(x.opcional)return true;
   if(x.tipo==="mejora")return !!v.dote||Object.values(v.mejora||{}).reduce((a,b)=>a+b,0)===2;
   if(x.tipo==="elegir")return !!(v.elegir||{})[x.rasgo];
   if(x.tipo==="subclase")return !!v.subclase;
   return (v[x.tipo]||[]).length===x.cantidad}
 function textoSel(x){const v=sub.elec;
+  if(x.tipo.startsWith("reemplazo_"))return v[x.tipo]?`${v[x.tipo].quitar} → ${v[x.tipo].poner}`:"no cambiar";
   if(x.tipo==="mejora")return v.dote?`Dote: ${v.dote}`:Object.entries(v.mejora||{}).map(([c,n])=>`${c} +${n}`).join(", ");
   if(x.tipo==="elegir")return (v.elegir||{})[x.rasgo]||"";
   if(x.tipo==="subclase")return v.subclase||"";
@@ -821,6 +842,9 @@ function pintarSubida(sv){
     else if(x.tipo==="mejora")abrirHoja("Mejora de característica",[{t:"+2 a una característica",v:"2"},{t:"+1 a dos características",v:"11"},{t:"Una dote",v:"dote"}],modo=>{
       if(modo==="dote")abrirHoja("Dote",(x.dotes||[]).map(n=>({t:n,v:n})),n=>{v.dote=n;delete v.mejora;pintarSubida(subida)});
       else abrirMulti(modo==="2"?"Característica (+2)":"Características (+1 cada una)",CARS_APP,modo==="2"?1:2,[],cs=>{v.mejora=Object.fromEntries(cs.map(c=>[c,modo==="2"?2:1]));delete v.dote;pintarSubida(subida)})});
+    else if(x.tipo.startsWith("reemplazo_"))abrirHoja("¿Cuál cambias?",[{t:"No cambiar ninguno",v:""},...x.quitar_de.map(n=>({t:n,v:n}))],q=>{
+      if(!q){delete v[x.tipo];return pintarSubida(subida)}
+      abrirHoja(`${q}: ¿por cuál?`,x.de.map(n=>({t:n,v:n})),n=>{v[x.tipo]={quitar:q,poner:n};pintarSubida(subida)})});
     else abrirMulti(nombreSel[x.tipo],x.de,x.cantidad,v[x.tipo],l=>{v[x.tipo]=l;pintarSubida(subida)})});
   const env=$("subEnviar");if(env)env.onclick=async()=>{
     if(!envioSubida){const ts=Date.now();envioSubida={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"subida",clase:cl.clase,pg_dado:sub.pg.valor,pg_modo:sub.pg.modo,pg_dados:sub.pg.dados,elecciones:sub.elec,ts}}}
