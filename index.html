@@ -109,6 +109,7 @@ select.oculto{display:none}
 .hoja button{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left}
 .hoja button.actual{border-color:var(--ember);background:var(--sel);font-weight:700}
 @media (min-width:700px){.hoja-fondo{align-items:center}.hoja{border-radius:12px}}
+.hoja.desplegable{max-width:none;width:100%;flex:1 1 100%;grid-column:1/-1;max-height:60vh;border-radius:6px;padding:10px;border-color:var(--ember)}
 .zoom button{width:auto;flex:0 0 auto;min-width:44px;min-height:40px;padding:6px 12px}
 .hx{stroke:var(--line);stroke-width:1}
 .hx.alcanza{stroke:var(--ok);stroke-width:2;cursor:pointer}
@@ -541,7 +542,7 @@ function salpicar(papel){papel.querySelectorAll(".gota").forEach(g=>g.remove());
 $("estiloHoja").addEventListener("click",()=>{$("panelEstiloHoja").hidden=!$("panelEstiloHoja").hidden});
 $("abrirHoja").addEventListener("click",()=>{$("hoja").hidden=false;document.body.style.overflow="hidden";pintarHoja()});
 $("cerrarHoja").addEventListener("click",()=>{$("hoja").hidden=true;document.body.style.overflow=""});
-document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden&&!document.querySelector(".hoja-fondo"))$("cerrarHoja").click()});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden&&!document.querySelector(".hoja-fondo,.desplegable"))$("cerrarHoja").click()});
 const pips=(q,m,cls="")=>`<span class="hp-pips ${cls}">${Array.from({length:m},(_,i)=>`<i class="${i<q?"lleno":""}"></i>`).join("")}</span>`;
 function pintarHoja(){
   const h=hojaPJ, P=$("papelHoja"); estiloHoja(); if(!h){P.innerHTML='<p class="hp-texto">Todavía no llegó la hoja.</p>';return}
@@ -718,16 +719,46 @@ $("soloTextoPiso").addEventListener("click",async()=>{
 // El motor manda, por clase, qué se gana y qué hay que elegir; aquí solo se elige y se envía.
 let subida=null, sub={clase:null,pg:null,elec:{}}, envioSubida=null;
 const nombreSel={subclase:"Subclase",conjuros:"Conjuros",trucos:"Trucos",invocaciones:"Invocaciones",mejora:"Mejora de característica",elegir:"Elección"};
+// ---- Listas desplegables ----
+// Una lista se abre en su lugar, debajo del botón que la pidió, y empuja hacia abajo lo que sigue (como una sección
+// que se expande); apretar de nuevo el botón, Cancelar, Escape o tocar fuera la cierra. Las cadenas (conjuro →
+// frecuencia → cargas) se abren en el mismo lugar. Sin botón de origen (raro), cae a la hoja emergente.
+let ultimoClic=null, anclaPanel=null, panelAbierto=null;
+document.addEventListener("click",e=>{
+  const p=panelAbierto;
+  if(p&&p.ancla&&!p.hoja.contains(e.target)){
+    if(p.ancla.contains(e.target)){e.stopPropagation();e.preventDefault();p.cerrar();return}
+    p.cerrar(false)}
+  ultimoClic=e.target.closest("button");
+},true);
+function abrirPanel(){
+  const c=ultimoClic;
+  const ancla=c&&c.isConnected&&!c.closest(".hoja,.hoja-fondo")?c
+    :c&&c.closest(".desplegable")&&anclaPanel&&anclaPanel.isConnected?anclaPanel:null;
+  if(panelAbierto)panelAbierto.cerrar(false);
+  const hoja=document.createElement("div");hoja.className="hoja";let fondo=null;
+  const tecla=e=>{if(e.key==="Escape"){e.stopPropagation();p.cerrar()}};
+  const p={hoja,ancla,
+    cerrar(foco=true){(fondo||hoja).remove();document.removeEventListener("keydown",tecla,true);if(panelAbierto===p)panelAbierto=null;
+      if(foco&&ancla&&ancla.isConnected)ancla.focus({preventScroll:true})},
+    mostrar(foco){
+      if(ancla){anclaPanel=ancla;hoja.classList.add("desplegable");hoja.setAttribute("role","group");(ancla.closest("label")||ancla).after(hoja);
+        requestAnimationFrame(()=>hoja.scrollIntoView({block:"nearest",behavior:"smooth"}))}
+      else{fondo=document.createElement("div");fondo.className="hoja-fondo";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+        fondo.appendChild(hoja);document.body.appendChild(fondo);fondo.addEventListener("click",e=>{if(e.target===fondo)p.cerrar()})}
+      document.addEventListener("keydown",tecla,true);panelAbierto=p;
+      const f=foco||hoja.querySelector("button.actual")||hoja.querySelector("button:not(:disabled)");if(f)f.focus({preventScroll:true})}};
+  return p;
+}
 function abrirMulti(titulo,de,cantidad,actuales,listo){
   let marcados=new Set(actuales||[]);
-  const fondo=document.createElement("div");fondo.className="hoja-fondo";
-  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const panel=abrirPanel(),hoja=panel.hoja,cerrar=panel.cerrar;
   const tit=document.createElement("div");tit.className="eyebrow";hoja.appendChild(tit);
   const botones=de.map(x=>{const b=document.createElement("button");b.type="button";b.textContent=x;b.onclick=()=>{marcados.has(x)?marcados.delete(x):marcados.size<cantidad&&marcados.add(x);refrescar()};hoja.appendChild(b);return b});
-  const ok=document.createElement("button");ok.type="button";ok.textContent="Listo";ok.onclick=()=>{fondo.remove();listo([...marcados])};hoja.appendChild(ok);
-  const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>fondo.remove();hoja.appendChild(c);
+  const ok=document.createElement("button");ok.type="button";ok.textContent="Listo";ok.onclick=()=>{cerrar();listo([...marcados])};hoja.appendChild(ok);
+  const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
   function refrescar(){tit.textContent=`${titulo}: ${marcados.size} de ${cantidad}`;botones.forEach(b=>b.className=marcados.has(b.textContent)?"actual":"");ok.disabled=marcados.size!==cantidad}
-  refrescar();fondo.appendChild(hoja);document.body.appendChild(fondo);fondo.addEventListener("click",e=>{if(e.target===fondo)fondo.remove()});
+  refrescar();panel.mostrar();
 }
 const CARS_APP=["FUE","DES","CON","INT","SAB","CAR"];
 function completoSel(x){const v=sub.elec;
@@ -800,36 +831,26 @@ function pestanas(cb){
 document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>elegirPestana(b.dataset.tab)));
 matchMedia("(min-width:1000px)").addEventListener("change",()=>{if(combate)elegirPestana(pestana)});
 
-// ---- Listas emergentes en lugar de desplegables ----
-// Cada <select> queda oculto y un botón abre sus opciones en una hoja; elegir cambia el select y avisa
+// ---- Listas en lugar de <select> ----
+// Cada <select> queda oculto y un botón despliega sus opciones debajo (abrirPanel); elegir cambia el select y avisa
 // con los mismos eventos, así la lógica de la página no cambia.
 function etiquetaDe(sel){const l=sel.closest("label");if(!l)return"";return[...l.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(" ").trim()}
 function abrirHoja(titulo,opciones,elegir){
-  const fondo=document.createElement("div");fondo.className="hoja-fondo";
-  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const panel=abrirPanel(),hoja=panel.hoja,cerrar=panel.cerrar;
   if(titulo){const e=document.createElement("div");e.className="eyebrow";e.textContent=titulo;hoja.appendChild(e)}
   opciones.forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.t;b.disabled=!!o.no;b.onclick=()=>{cerrar();elegir(o.v)};hoja.appendChild(b)});
   const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
-  fondo.appendChild(hoja);document.body.appendChild(fondo);
-  const tecla=e=>{if(e.key==="Escape")cerrar()};
-  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla)}
-  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);
-  (hoja.querySelector("button:not(:disabled)")||c).focus();
+  panel.mostrar();
 }
 function abrirLista(sel,titulo){
-  const fondo=document.createElement("div");fondo.className="hoja-fondo";
-  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
-  const tit=titulo||etiquetaDe(sel);if(tit){const e=document.createElement("div");e.className="eyebrow";e.textContent=tit;hoja.appendChild(e)}
+  const panel=abrirPanel(),hoja=panel.hoja,cerrar=panel.cerrar;
+  const tit=titulo||(panel.ancla?"":etiquetaDe(sel));if(tit){const e=document.createElement("div");e.className="eyebrow";e.textContent=tit;hoja.appendChild(e)}
   [...sel.options].forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.text;b.disabled=o.disabled;
     if(o.value===sel.value)b.className="actual";
     b.onclick=()=>{sel.value=o.value;sel.dispatchEvent(new Event("input",{bubbles:true}));sel.dispatchEvent(new Event("change",{bubbles:true}));cerrar();mejorarSelects()};
     hoja.appendChild(b)});
   const cancelar=document.createElement("button");cancelar.type="button";cancelar.className="sec";cancelar.textContent="Cancelar";cancelar.onclick=()=>cerrar();hoja.appendChild(cancelar);
-  fondo.appendChild(hoja);document.body.appendChild(fondo);
-  const tecla=e=>{if(e.key==="Escape")cerrar()};
-  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla);sel._boton&&sel._boton.focus()}
-  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);
-  (hoja.querySelector("button.actual")||hoja.querySelector("button")).focus();
+  panel.mostrar();
 }
 function mejorarSelects(){
   document.querySelectorAll("select:not([data-sin-boton])").forEach(sel=>{
@@ -1681,8 +1702,7 @@ const nombreFrec=f=>f==="1/dia"?"1 vez al día":f==="a voluntad"?"a voluntad":f.
 
 // Lista emergente con buscador (bases, conjuros y objetos son largas).
 function abrirBuscador(titulo,opciones,elegir){
-  const fondo=document.createElement("div");fondo.className="hoja-fondo";
-  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  const panel=abrirPanel(),hoja=panel.hoja,cerrar=panel.cerrar;
   hoja.innerHTML=`<div class="eyebrow">${esc(titulo)}</div><input type="search" placeholder="Buscar…" autocomplete="off"><div class="fj-lista"></div>`;
   const lista=hoja.querySelector(".fj-lista"),caja=hoja.querySelector("input");
   function pintar(){const q=normF(caja.value);const vis=opciones.filter(o=>!q||normF(o.t+" "+(o.d||"")).includes(q)).slice(0,80);
@@ -1690,10 +1710,7 @@ function abrirBuscador(titulo,opciones,elegir){
       b.innerHTML=`${esc(o.t)}${o.d?`<span class="fj-fuente"> · ${esc(o.d)}</span>`:""}`;b.onclick=()=>{cerrar();elegir(o.v)};lista.appendChild(b)});
     if(!vis.length)lista.innerHTML=`<div class="estado">Nada con «${esc(caja.value)}».</div>`}
   const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
-  caja.oninput=pintar;pintar();fondo.appendChild(hoja);document.body.appendChild(fondo);
-  const tecla=e=>{if(e.key==="Escape")cerrar()};
-  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla)}
-  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);caja.focus();
+  caja.oninput=pintar;pintar();panel.mostrar(caja);
 }
 
 async function cargarForja(){
@@ -1801,7 +1818,7 @@ $("fjEncargar").onclick=async()=>{
   catch(e){$("fjEncargar").disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo.`}};
 $("abrirForja").addEventListener("click",()=>{$("forja").hidden=false;document.body.style.overflow="hidden";if(forjaCat)armarForja();else cargarForja()});
 $("cerrarForja").addEventListener("click",()=>{$("forja").hidden=true;document.body.style.overflow=""});
-document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("forja").hidden&&!document.querySelector(".hoja-fondo"))$("cerrarForja").click()});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("forja").hidden&&!document.querySelector(".hoja-fondo,.desplegable"))$("cerrarForja").click()});
 
 
 arrancar();
