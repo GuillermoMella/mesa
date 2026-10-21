@@ -287,6 +287,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .fj-taller{display:grid;grid-template-columns:1fr 1fr;gap:6px}.fj-taller button{width:100%;padding:10px}
 .fj-taller button.actual{border-color:var(--ember);color:var(--fg);background:var(--sel);font-weight:700}
 .fj-contra{font-size:.85rem;color:var(--warn)}
+.fj-cant{display:flex;align-items:center;gap:8px}.fj-cant input{width:80px}
 .forja label.check{display:flex;gap:8px;align-items:center;color:var(--fg)}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
 </style>
@@ -314,13 +315,19 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="forja">
       <div class="estado" id="fjCarga"></div>
       <div id="fjCuerpo" class="forja" hidden>
-        <div class="fj-taller" id="fjTaller" role="group" aria-label="Taller"><button type="button" class="sec" data-t="magico">Herrero mágico</button><button type="button" class="sec" data-t="herrero">Herrero</button></div>
+        <div class="fj-taller" id="fjTaller" role="group" aria-label="Taller"><button type="button" class="sec" data-t="magico">Herrero mágico</button><button type="button" class="sec" data-t="herrero">Herrero</button><button type="button" class="sec" data-t="alquimista">Alquimista</button><button type="button" class="sec" data-t="escriba">Escriba</button></div>
         <section class="panel">
           <div class="fj-cab"><canvas id="fjDibujo" width="16" height="16" aria-label="Dibujo del objeto"></canvas><div id="fjResumen"></div></div>
           <label for="fjNombre">Nombre del objeto<input id="fjNombre" autocomplete="off" placeholder="Como lo quieras llamar"></label>
           <label>Base<button type="button" class="selbtn" id="fjBase"></button></label>
           <label id="fjFilaPedida" for="fjPedida" hidden>¿Qué objeto? (el DM fija su precio)<input id="fjPedida" autocomplete="off" placeholder="Corona de plata, botas de montar…"></label>
           <label class="check" id="fjFilaConsumible"><input type="checkbox" id="fjConsumible"> De un solo uso (consumible)</label>
+        </section>
+        <section class="panel" id="fjSecPedido" hidden>
+          <div class="eyebrow" id="fjPedidoTitulo"></div>
+          <div class="fj-fuente" id="fjPedidoNota"></div>
+          <div id="fjItems"></div>
+          <div class="fj-add"><button type="button" class="sec" id="fjAddItem"></button></div>
         </section>
         <section class="panel" id="fjSecHerrero" hidden>
           <div class="eyebrow">Mejoras del herrero</div>
@@ -1693,7 +1700,7 @@ function calcularF(cat,ficha){
   const pasos=[{concepto:"base: "+base.nombre,po:base.precio_po,acumulado:base.precio_po,fuente:base.pedida?"el DM fija su precio":"PHB"}];
   for(const p of ficha.propiedades||[]){
     if(p.tipo==="consulta"){consultas++;pasos.push({concepto:p.texto,consulta:true});continue}
-    const c=componenteF(cat,p,base),po=r2F(c.po*factor);total+=po;semanas+=fab[c.rareza].semanas;rar.push(c.rareza);
+    const c=componenteF(cat,p,base),po=r2F(c.po*factor);total+=po;semanas+=fab[c.rareza].semanas*factor;rar.push(c.rareza);
     pasos.push({concepto:c.texto,rareza:c.rareza,po,acumulado:r2F(total),fuente:c.fuente})}
   const rareza=rar.length?rar.reduce((a,b)=>cat.orden.indexOf(b)>cat.orden.indexOf(a)?b:a):null;
   return {base,pasos,precio_po:r2F(total),rareza,semanas,consultas}}
@@ -1713,15 +1720,27 @@ function calcularHerreroF(cat,ficha){
     pasos.push({concepto:d.nombre,po,acumulado:total,fuente:d.fuente,ventaja:d.ventaja,
       contrapartidas:[d.contrapartida,...extra.map(x=>h.contrapartidas[x.tipo].texto+(x.texto?": "+x.texto:""))].filter(Boolean)})}
   return {base,pasos,precio_po:r2F(total),dias:Math.max(1,Math.ceil(trabajo*h.dias_por_semana/h.po_por_semana)),consultas,mejoras:ids.filter(x=>x!=="consulta").length}}
+function calcularPedidoF(cat,ficha){
+  const pd=cat.pedidos,j=pd.jornal_po_dia;let total=0,dias=0;const pasos=[];
+  for(const it of ficha.items||[]){const n=Number(it.cantidad||1);if(!(n>=1))throw new Error("la cantidad tiene que ser 1 o más");
+    let c;
+    if(ficha.taller==="alquimista"){c=pd.pociones.find(x=>x.nombre===it.pocion);if(!c)throw new Error("poción «"+it.pocion+"»")}
+    else{const s=cat.conjuros.find(x=>x.nombre===it.conjuro);if(!s)throw new Error("conjuro «"+it.conjuro+"»");
+      const tb=pd.pergaminos[String(s.nivel)];c={nombre:"Pergamino de "+s.nombre,costo:tb.po+s.material_po,dias:tb.dias,material:s.material_po}}
+    const u=r2F(c.costo+c.dias*j);total=r2F(total+u*n);dias+=c.dias*n;
+    pasos.push({concepto:c.nombre,cantidad:n,po_unidad:u,po:r2F(u*n),dias:c.dias*n,costo:c.costo,dias_unidad:c.dias,material:c.material||0,fuente:c.fuente||""})}
+  return {pasos,precio_po:total,dias}}
 // </forja-calculo>
 
 const cifraF=n=>{const [e,d]=Math.abs(n).toFixed(2).split(".");return (n<0?"−":"")+e.replace(/\B(?=(\d{3})+(?!\d))/g,".")+(d!=="00"?","+d:"")};
 const NOMBRE_BONO={ataque_y_dano:"Ataque y daño (arma)",ca:"Clase de armadura",salvaciones:"Tiradas de salvación",pruebas:"Pruebas de característica",cd_de_conjuros:"CD de conjuros",ataque_de_conjuros:"Ataque de conjuros"};
 let forjaCat=null, fj=null, envioForja=null;
-function fjNuevo(){return {taller:"magico",nombre:"",base:null,base_pedida:null,propiedades:[],mejoras:[],consumible:false,estetica:"",nota:""}}
+function fjNuevo(){return {taller:"magico",nombre:"",base:null,base_pedida:null,propiedades:[],mejoras:[],pociones:[],pergaminos:[],consumible:false,estetica:"",nota:""}}
 try{fj=JSON.parse(localStorage.getItem("mesa_forja")||"null")}catch(e){}
 if(!fj||!Array.isArray(fj.propiedades))fj=fjNuevo();
 if(!Array.isArray(fj.mejoras)){fj.mejoras=[];fj.taller=fj.taller||"magico"}
+if(!Array.isArray(fj.pociones))fj.pociones=[];
+if(!Array.isArray(fj.pergaminos))fj.pergaminos=[];
 function guardarFj(){try{localStorage.setItem("mesa_forja",JSON.stringify(fj))}catch(e){}}
 const rarezaF=r=>r?forjaCat.nombre_rareza[r]:"—";
 const chipF=r=>r?`<span class="fj-chip" style="--c:${forjaCat.colores_rareza[r]}">${esc(rarezaF(r))}</span>`:"";
@@ -1761,9 +1780,11 @@ function armarForja(){
 // todo=true repinta también la lista de propiedades (si no, solo los números, para no perder el foco al escribir).
 function refrescarForja(todo){
   if(!forjaCat)return;
-  const herr=fj.taller==="herrero";
-  $("fjSecMagia").hidden=herr;$("fjFilaConsumible").hidden=herr;$("fjSecHerrero").hidden=!herr;
-  document.querySelectorAll("#fjTaller button").forEach(b=>b.classList.toggle("actual",b.dataset.t===(herr?"herrero":"magico")));
+  const herr=fj.taller==="herrero",ped=fj.taller==="alquimista"||fj.taller==="escriba";
+  document.querySelectorAll("#fjTaller button").forEach(b=>b.classList.toggle("actual",b.dataset.t===fj.taller));
+  ["fjNombre","fjBase","fjEstetica"].forEach(id=>$(id).closest("label").hidden=ped);$("fjDibujo").hidden=ped;
+  $("fjSecPedido").hidden=!ped;$("fjSecMagia").hidden=herr||ped;$("fjFilaConsumible").hidden=herr||ped;$("fjSecHerrero").hidden=!herr;
+  if(ped)return refrescarPedido(todo);
   if(herr)return refrescarHerrero(todo);
   let calc=null,error="";
   try{calc=calcularF(forjaCat,fj)}catch(e){error=e.message}
@@ -1789,7 +1810,7 @@ function refrescarForja(todo){
     fila.querySelector(".fj-po").innerHTML=paso.consulta?`<span class="fj-fuente">por valorar</span>`:`${chipF(paso.rareza)}<div class="mono">${cifraF(paso.po)} po</div>`});
   const r=calc&&calc.rareza;
   $("fjResumen").innerHTML=calc?`<div class="fj-total">${cifraF(calc.precio_po)} po</div>${calc.consultas||calc.base.pedida?`<div class="fj-fuente">más lo que valore el DM${calc.base.pedida?" (base":""}${calc.base.pedida&&calc.consultas?" y ":calc.base.pedida?")":""}${calc.consultas?`${calc.base.pedida?"":" ("}${calc.consultas} propiedad${calc.consultas>1?"es":""} especial${calc.consultas>1?"es":""})`:""}</div>`:""}
-    <div>${r?chipF(r):`<span class="fj-fuente">Sin componentes todavía</span>`}${calc.semanas?` <span class="fj-fuente">· ${calc.semanas} semanas de trabajo</span>`:""}${fj.consumible?` <span class="fj-fuente">· de un solo uso: mitad de precio por componente</span>`:""}</div>`
+    <div>${r?chipF(r):`<span class="fj-fuente">Sin componentes todavía</span>`}${calc.semanas?` <span class="fj-fuente">· ${String(calc.semanas).replace(".",",")} semanas de trabajo</span>`:""}${fj.consumible?` <span class="fj-fuente">· de un solo uso: mitad de precio y de tiempo (Xanathar)</span>`:""}</div>`
     :`<div class="fj-fuente">${error?"No se pudo calcular: "+esc(error):"Elige una base para empezar."}</div>`;
   pintarDibujoF(calc?calc.base:null,r);
   const consultasVacias=fj.propiedades.some(p=>p.tipo==="consulta"&&!String(p.texto||"").trim());
@@ -1830,6 +1851,35 @@ function refrescarHerrero(todo){
   const vacias=fj.mejoras.some(m=>m.id==="consulta"&&!String(m.texto||"").trim())||fj.mejoras.some(m=>(m.contrapartidas||[]).some(x=>!String(x.texto||"").trim()));
   $("fjEncargar").disabled=!(calc&&fj.nombre.trim()&&fj.mejoras.length&&!vacias&&(fj.base_pedida===null||String(fj.base_pedida).trim()));
 }
+// Alquimista y escriba: lista de lo pedido con cantidad; costo de Xanathar + jornal por día.
+function refrescarPedido(todo){
+  const alq=fj.taller==="alquimista",lista=alq?fj.pociones:fj.pergaminos,pd=forjaCat.pedidos;
+  $("fjFilaPedida").hidden=true;
+  $("fjPedidoTitulo").textContent=alq?"Pociones":"Pergaminos";
+  $("fjPedidoNota").textContent=alq?"Las de curación las hace un herborista; las demás, alguien que tenga la fórmula y el ingrediente exótico (eso lo veo yo). Precio por unidad: costo de Xanathar más el jornal por los días de trabajo."
+    :"Lo hace un lanzador que tenga el conjuro preparado o conocido y sea competente en Arcanos; pone los componentes y los que tienen valor se suman. Precio por unidad: costo de Xanathar más el jornal por los días de trabajo.";
+  $("fjAddItem").textContent=alq?"+ Poción":"+ Pergamino";
+  let calc=null,error="";
+  try{calc=calcularPedidoF(forjaCat,{taller:fj.taller,items:lista})}catch(e){error=e.message}
+  const cont=$("fjItems");
+  if(todo){cont.innerHTML="";
+    lista.forEach((it,i)=>{const fila=document.createElement("div");fila.className="fj-prop";fila.dataset.i=i;
+      fila.innerHTML=`<div><div class="fj-texto"></div><div class="fj-fuente"></div>
+        <label class="fj-cant">Cantidad<input type="number" min="1" max="99" inputmode="numeric" value="${Number(it.cantidad)||1}"></label></div>
+        <div class="fj-po"></div><button type="button" class="sec fj-quitar" aria-label="Quitar">✕</button>`;
+      fila.querySelector(".fj-quitar").onclick=()=>{lista.splice(i,1);guardarFj();refrescarForja(true)};
+      const n=fila.querySelector("input");n.oninput=()=>{const v=Math.max(1,Math.min(99,Math.floor(Number(n.value)||1)));it.cantidad=v;guardarFj();refrescarForja(false)};
+      cont.appendChild(fila)})}
+  cont.querySelectorAll(".fj-prop").forEach(fila=>{const paso=calc&&calc.pasos[Number(fila.dataset.i)];if(!paso)return;
+    fila.querySelector(".fj-texto").textContent=paso.concepto;
+    fila.querySelector(".fj-fuente").textContent=`${cifraF(paso.po_unidad)} po c/u: ${cifraF(paso.costo)} po${paso.material?` (incluye ${cifraF(paso.material)} po de componente)`:""} + ${String(paso.dias_unidad).replace(".",",")} día${paso.dias_unidad===1?"":"s"} × ${pd.jornal_po_dia} po de jornal`;
+    fila.querySelector(".fj-po").innerHTML=`<div class="mono">${cifraF(paso.po)} po</div>`});
+  $("fjResumen").innerHTML=calc&&calc.pasos.length?`<div class="fj-total">${cifraF(calc.precio_po)} po</div><div class="fj-fuente">${alq?"Alquimista":"Escriba"} · ${String(calc.dias).replace(".",",")} día${calc.dias===1?"":"s"} de trabajo</div>`
+    :`<div class="fj-fuente">${error?"No se pudo calcular: "+esc(error):alq?"Agrega las pociones.":"Agrega los pergaminos."}</div>`;
+  const cv=$("fjDibujo");cv.getContext("2d").clearRect(0,0,16,16);
+  $("fjEncargar").disabled=!(calc&&calc.pasos.length);
+}
+
 // Los pasos del herrero empiezan después de la base (si la hay) y saltan los pedidos especiales.
 function base0(calc){return calc&&calc.base?1:0}
 
@@ -1885,9 +1935,19 @@ $("fjAddMejora").onclick=()=>{const h=forjaCat.herrero,base=fj.base?forjaCat.bas
   abrirHoja("Mejora",h.mejoras.map(d=>{const no=ids.includes(d.id)?"ya está":d.bases&&!(base&&d.bases.includes(base.nombre))?(base?"no va sobre "+base.nombre:"necesita una base"):
       d.requiere_mejora&&!ids.includes(d.requiere_mejora)?"requiere "+h.mejoras.find(x=>x.id===d.requiere_mejora).nombre:"";
     return {t:`${d.nombre} — ${cifraF(d.precio_po)} po · ${d.clase}${no?` (${no})`:""}`,v:d.id,no:!!no}}),id=>{fj.mejoras.push({id});guardarFj();refrescarForja(true)})};
+$("fjAddItem").onclick=()=>{const pd=forjaCat.pedidos,j=pd.jornal_po_dia;
+  if(fj.taller==="alquimista")abrirBuscador("Poción (Guía del DM)",pd.pociones.map(x=>({t:x.nombre,d:`${rarezaF(x.rareza)} · ${cifraF(r2F(x.costo+x.dias*j))} po c/u`,v:x.nombre})),
+    pocion=>{fj.pociones.push({pocion,cantidad:1});guardarFj();refrescarForja(true)});
+  else abrirBuscador("Pergamino de…",forjaCat.conjuros.map(s=>{const tb=pd.pergaminos[String(s.nivel)];
+      return {t:s.nombre,d:`${s.nivel?"nivel "+s.nivel:"truco"} · ${cifraF(r2F(tb.po+s.material_po+tb.dias*j))} po c/u`,v:s.nombre}}),
+    conjuro=>{fj.pergaminos.push({conjuro,cantidad:1});guardarFj();refrescarForja(true)})};
 $("fjAddPedido").onclick=()=>{fj.mejoras.push({id:"consulta",texto:""});guardarFj();refrescarForja(true);const t=[...document.querySelectorAll("#fjMejoras textarea")].pop();if(t)t.focus()};
 $("fjEncargar").onclick=async()=>{
-  const herr=fj.taller==="herrero",calc=herr?calcularHerreroF(forjaCat,fj):calcularF(forjaCat,fj),est=$("fjEstado");
+  const herr=fj.taller==="herrero",ped=fj.taller==="alquimista"||fj.taller==="escriba",est=$("fjEstado");
+  const calc=ped?calcularPedidoF(forjaCat,{taller:fj.taller,items:fj.taller==="alquimista"?fj.pociones:fj.pergaminos}):herr?calcularHerreroF(forjaCat,fj):calcularF(forjaCat,fj);
+  if(!envioForja&&ped){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",taller:fj.taller,
+    nombre:fj.taller==="alquimista"?"Pedido de pociones":"Pedido de pergaminos",nota:fj.nota.trim(),
+    items:JSON.parse(JSON.stringify(fj.taller==="alquimista"?fj.pociones:fj.pergaminos)),precio_app:calc.precio_po,ts}}}
   if(!envioForja&&herr){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",taller:"herrero",nombre:fj.nombre.trim(),
     base:fj.base,base_pedida:fj.base_pedida===null?null:String(fj.base_pedida).trim(),estetica:fj.estetica.trim(),nota:fj.nota.trim(),
     mejoras:fj.mejoras.map(m=>JSON.parse(JSON.stringify(m))),precio_app:calc.precio_po,ts}}}
