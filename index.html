@@ -269,6 +269,21 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .sub{display:grid;gap:8px;padding-left:10px;border-left:2px solid var(--line)}
 .sub:empty{display:none}
 .fila{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
+/* Forja */
+.hoja-fondo{z-index:70}
+.forja{max-width:760px;margin:0 auto;display:grid;gap:12px}
+.forja textarea,.hoja input[type=search]{font:inherit;font-size:.9rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
+.fj-cab{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center}
+.fj-cab canvas{width:96px;height:96px;image-rendering:pixelated;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+.fj-total{font-family:var(--mono);font-size:1.5rem;line-height:1.2}
+.fj-chip{display:inline-block;font-size:.75rem;font-weight:700;border:1px solid var(--c);color:var(--c);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.fj-prop{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:start;padding:10px 0;border-top:1px solid var(--line)}
+.fj-prop>div:first-child{display:grid;gap:6px}
+.fj-po{text-align:right;display:grid;gap:4px;justify-items:end}.fj-po .mono{font-family:var(--mono);white-space:nowrap}
+.fj-fuente{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+.fj-add{display:flex;flex-wrap:wrap;gap:6px}
+.fj-lista{display:grid;gap:6px}
+.forja label.check{display:flex;gap:8px;align-items:center;color:var(--fg)}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
 </style>
 </head>
@@ -276,7 +291,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 <div class="wrap">
   <header>
     <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
-    <div style="display:flex;gap:8px"><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
+    <div style="display:flex;gap:8px"><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
   </header>
 
   <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
@@ -288,6 +303,34 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <label>Letra de lo escrito<select id="hpLetra"><option value='"Caveat",cursive'>Pluma rápida</option><option value='"Kalam",cursive'>Lápiz</option><option value='"Patrick Hand",cursive'>Imprenta a mano</option><option value='"IM Fell English",serif'>Tipografía antigua</option></select></label>
     </div>
     <div class="hp" id="papelHoja"></div>
+  </div>
+
+  <div class="hoja-pj" id="forja" hidden role="dialog" aria-modal="true" aria-label="Forja">
+    <div class="hp-barra"><span class="eyebrow" style="margin-right:auto">Forja · encargo a medida</span><button class="sec" id="fjNuevo">Nuevo diseño</button><button class="sec" id="cerrarForja">Cerrar</button></div>
+    <div class="forja">
+      <div class="estado" id="fjCarga"></div>
+      <div id="fjCuerpo" class="forja" hidden>
+        <section class="panel">
+          <div class="fj-cab"><canvas id="fjDibujo" width="16" height="16" aria-label="Dibujo del objeto"></canvas><div id="fjResumen"></div></div>
+          <label for="fjNombre">Nombre del objeto<input id="fjNombre" autocomplete="off" placeholder="Como lo quieras llamar"></label>
+          <label>Base<button type="button" class="selbtn" id="fjBase"></button></label>
+          <label id="fjFilaPedida" for="fjPedida" hidden>¿Qué objeto? (el DM fija su precio)<input id="fjPedida" autocomplete="off" placeholder="Corona de plata, botas de montar…"></label>
+          <label class="check"><input type="checkbox" id="fjConsumible"> De un solo uso (consumible)</label>
+        </section>
+        <section class="panel">
+          <div class="eyebrow">Propiedades</div>
+          <div id="fjProps"></div>
+          <div class="fj-add"><button type="button" class="sec" id="fjAddComp">+ Componente</button><button type="button" class="sec" id="fjAddBono">+ Bonificador</button><button type="button" class="sec" id="fjAddConj">+ Conjuro</button><button type="button" class="sec" id="fjAddComo">+ Como un objeto</button><button type="button" class="sec" id="fjAddEsp">+ Propiedad especial</button></div>
+        </section>
+        <section class="panel">
+          <label for="fjEstetica">Aspecto (cómo se ve, materiales, detalles)<textarea id="fjEstetica" rows="3"></textarea></label>
+          <label for="fjNota">Nota para el DM (para qué es: premio del torneo, compra…)<textarea id="fjNota" rows="2"></textarea></label>
+          <button type="button" id="fjEncargar" disabled>Encargar al DM</button>
+          <div class="estado" id="fjEstado"></div>
+          <div class="fj-fuente">El precio lo recalcula la herramienta del DM al llegar el encargo; si difiere, manda ese. La descripción final la escribe el DM.</div>
+        </section>
+      </div>
+    </div>
   </div>
 
   <section class="panel" id="ajustes" hidden>
@@ -1584,6 +1627,181 @@ $("tirar").addEventListener("click",async()=>{
     est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Revisa la conexión y aprieta de nuevo, o escríbele el total al DM.`;
   }
 });
+
+
+// ---- Forja: diseñar un objeto mágico con su precio en vivo (DGT-216, DGT-217) ----
+// El catálogo lo publica tools/forja.py (forja.json en mesa-datos) con los precios ya resueltos; la app solo suma.
+// Al encargar, la herramienta lo recalcula y manda ella. Lo que no está en el menú va como consulta para el DM.
+// <forja-calculo> (tools/test_forja.py corre este bloque con node y lo compara con forja.py)
+// Como round(x, 2) de Python: el decimal más cercano y, en un empate exacto (x·8 entero), el par.
+const r2F=x=>{if(Number.isInteger(x*8)&&!Number.isInteger(x*4)){const c=Math.floor(x*100);return (c%2?c+1:c)/100}return Number(x.toFixed(2))};
+function normF(s){return String(s??"").normalize("NFKD").replace(/[^\x00-\x7f]/g,"").toLowerCase().trim()}
+function figuraF(cat,nombre){const n=normF(nombre),ps=n.split(/\s+/);
+  for(const [pal,fig] of cat.palabras)if(ps.includes(pal)||n.startsWith(pal)||n.includes(" "+pal))return fig;return "amuleto"}
+function tipoCaF(cat,base){if(base.tipo_ca)return base.tipo_ca;const n=normF(base.nombre);
+  return n.includes("escudo")?"escudo":cat.palabras_armadura.some(x=>n.includes(x))?"armadura":"ca"}
+function usosF(f,u){if(f==="1/dia")return 1;if(f==="a voluntad")return u.a_voluntad;
+  const m=/^(\d+) cargas \((todas|(\d+)d(\d+)([+-]\d+)?)\)$/.exec(f);if(!m)throw new Error("frecuencia «"+f+"»");
+  const c=Number(m[1]),r=m[2]==="todas"?c:Math.min(c,Number(m[3])*(Number(m[4])+1)/2+Number(m[5]||0));
+  return r+u.plus_por_carga_acumulada*(c-r)}
+function componenteF(cat,p,base){
+  if(p.tipo==="componente"){const c=cat.componentes.find(x=>x.id===p.id);if(!c)throw new Error("componente «"+p.id+"»");
+    return {rareza:c.rareza,po:c.po,texto:c.texto+(p.texto?": "+p.texto:""),fuente:c.fuente}}
+  if(p.tipo==="bono"){const b=(cat.bonos[p.a==="ca"?"ca:"+tipoCaF(cat,base):p.a]||{})[String(p.valor)];if(!b)throw new Error("+"+p.valor+" a "+p.a);return b}
+  if(p.tipo==="conjuro"){const c=cat.conjuros.find(x=>x.nombre===p.conjuro);if(!c)throw new Error("conjuro «"+p.conjuro+"»");
+    const m=cat.modelo_conjuros,f=p.frecuencia||"1/dia",u=usosF(f,m.usos),k=m.A*Math.pow(u,m.b),pg=m.pergamino[String(c.nivel)];
+    return {rareza:c.rareza,po:r2F(pg*k),texto:`${c.nombre} (nivel ${c.nivel}), ${f}`,fuente:`pergamino de nivel ${c.nivel} (${pg} po) × ${k.toFixed(2)} por ${r2F(u)} usos al día`}}
+  if(p.tipo==="como"){const o=cat.como.find(x=>x.nombre===p.objeto);if(!o)throw new Error("objeto «"+p.objeto+"»");
+    return {rareza:o.rareza,po:o.po,texto:`${p.texto||"lo que hace"} ${o.nombre}`,fuente:o.fuente}}
+  throw new Error("tipo «"+p.tipo+"»")}
+function calcularF(cat,ficha){
+  const fab=cat.fabricacion,factor=ficha.consumible?cat.consumible_multiplica:1;
+  const base=ficha.base_pedida?{nombre:ficha.base_pedida,precio_po:0,pedida:true}:cat.bases.find(b=>b.nombre===ficha.base);
+  if(!base)return null;
+  let total=base.precio_po,semanas=0,consultas=0;const rar=[];
+  const pasos=[{concepto:"base: "+base.nombre,po:base.precio_po,acumulado:base.precio_po,fuente:base.pedida?"el DM fija su precio":"PHB"}];
+  for(const p of ficha.propiedades||[]){
+    if(p.tipo==="consulta"){consultas++;pasos.push({concepto:p.texto,consulta:true});continue}
+    const c=componenteF(cat,p,base),po=r2F(c.po*factor);total+=po;semanas+=fab[c.rareza].semanas;rar.push(c.rareza);
+    pasos.push({concepto:c.texto,rareza:c.rareza,po,acumulado:r2F(total),fuente:c.fuente})}
+  const rareza=rar.length?rar.reduce((a,b)=>cat.orden.indexOf(b)>cat.orden.indexOf(a)?b:a):null;
+  return {base,pasos,precio_po:r2F(total),rareza,semanas,consultas}}
+// </forja-calculo>
+
+const cifraF=n=>{const [e,d]=Math.abs(n).toFixed(2).split(".");return (n<0?"−":"")+e.replace(/\B(?=(\d{3})+(?!\d))/g,".")+(d!=="00"?","+d:"")};
+const NOMBRE_BONO={ataque_y_dano:"Ataque y daño (arma)",ca:"Clase de armadura",salvaciones:"Tiradas de salvación",pruebas:"Pruebas de característica",cd_de_conjuros:"CD de conjuros",ataque_de_conjuros:"Ataque de conjuros"};
+let forjaCat=null, fj=null, envioForja=null;
+function fjNuevo(){return {nombre:"",base:null,base_pedida:null,propiedades:[],consumible:false,estetica:"",nota:""}}
+try{fj=JSON.parse(localStorage.getItem("mesa_forja")||"null")}catch(e){}
+if(!fj||!Array.isArray(fj.propiedades))fj=fjNuevo();
+function guardarFj(){try{localStorage.setItem("mesa_forja",JSON.stringify(fj))}catch(e){}}
+const rarezaF=r=>r?forjaCat.nombre_rareza[r]:"—";
+const chipF=r=>r?`<span class="fj-chip" style="--c:${forjaCat.colores_rareza[r]}">${esc(rarezaF(r))}</span>`:"";
+const nombreFrec=f=>f==="1/dia"?"1 vez al día":f==="a voluntad"?"a voluntad":f.replace(/^1 cargas/,"1 carga").replace("(todas)","(recupera todas al amanecer)").replace(/\((\d+d\d+(?:[+-]\d+)?)\)/,"(recupera $1 al amanecer)");
+
+// Lista emergente con buscador (bases, conjuros y objetos son largas).
+function abrirBuscador(titulo,opciones,elegir){
+  const fondo=document.createElement("div");fondo.className="hoja-fondo";
+  const hoja=document.createElement("div");hoja.className="hoja";hoja.setAttribute("role","dialog");hoja.setAttribute("aria-modal","true");
+  hoja.innerHTML=`<div class="eyebrow">${esc(titulo)}</div><input type="search" placeholder="Buscar…" autocomplete="off"><div class="fj-lista"></div>`;
+  const lista=hoja.querySelector(".fj-lista"),caja=hoja.querySelector("input");
+  function pintar(){const q=normF(caja.value);const vis=opciones.filter(o=>!q||normF(o.t+" "+(o.d||"")).includes(q)).slice(0,80);
+    lista.innerHTML="";vis.forEach(o=>{const b=document.createElement("button");b.type="button";b.disabled=!!o.no;
+      b.innerHTML=`${esc(o.t)}${o.d?`<span class="fj-fuente"> · ${esc(o.d)}</span>`:""}`;b.onclick=()=>{cerrar();elegir(o.v)};lista.appendChild(b)});
+    if(!vis.length)lista.innerHTML=`<div class="estado">Nada con «${esc(caja.value)}».</div>`}
+  const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
+  caja.oninput=pintar;pintar();fondo.appendChild(hoja);document.body.appendChild(fondo);
+  const tecla=e=>{if(e.key==="Escape")cerrar()};
+  function cerrar(){fondo.remove();document.removeEventListener("keydown",tecla)}
+  fondo.addEventListener("click",e=>{if(e.target===fondo)cerrar()});document.addEventListener("keydown",tecla);caja.focus();
+}
+
+async function cargarForja(){
+  const est=$("fjCarga");
+  if(!cfg.repo||!cfg.token){est.textContent="Falta la conexión con la mesa (botón «Conexión»).";return}
+  est.textContent="Cargando el catálogo…";
+  try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/forja.json`,{headers:cabeceras(),cache:"no-store"});
+    if(r.status===404){est.textContent="El DM aún no publica el catálogo de la forja.";return}
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    forjaCat=JSON.parse(deB64((await r.json()).content));est.textContent="";armarForja()}
+  catch(e){est.textContent=`No se pudo cargar el catálogo (${e.message}).`}
+}
+
+function armarForja(){
+  $("fjCuerpo").hidden=false;
+  $("fjNombre").value=fj.nombre;$("fjEstetica").value=fj.estetica;$("fjNota").value=fj.nota;$("fjConsumible").checked=fj.consumible;
+  $("fjPedida").value=fj.base_pedida||"";
+  refrescarForja(true);
+}
+
+// todo=true repinta también la lista de propiedades (si no, solo los números, para no perder el foco al escribir).
+function refrescarForja(todo){
+  if(!forjaCat)return;
+  let calc=null,error="";
+  try{calc=calcularF(forjaCat,fj)}catch(e){error=e.message}
+  $("fjBase").innerHTML=fj.base?`<span>${esc(fj.base)}</span><span class="fj-fuente">${cifraF(calc?calc.base.precio_po:0)} po</span>`:fj.base_pedida!==null?"<span>Otra base: el DM fija su precio</span>":"<span>Elegir la base…</span>";
+  $("fjFilaPedida").hidden=fj.base_pedida===null;
+  if(todo){
+    const cont=$("fjProps");cont.innerHTML="";
+    fj.propiedades.forEach((p,i)=>{const fila=document.createElement("div");fila.className="fj-prop";fila.dataset.i=i;
+      fila.innerHTML=`<div><div class="fj-texto"></div><div class="fj-fuente"></div>
+        ${p.tipo==="componente"?`<input class="fj-detalle" placeholder="Detalle (tipo de daño, característica…), opcional" value="${esc(p.texto||"")}">`:""}
+        ${p.tipo==="consulta"?`<textarea class="fj-detalle" rows="2" placeholder="Qué hace (lo valora el DM)">${esc(p.texto||"")}</textarea>`:""}
+        ${p.tipo==="conjuro"?`<button type="button" class="sec fj-frec">Cambiar frecuencia</button>`:""}</div>
+        <div class="fj-po"></div><button type="button" class="sec fj-quitar" aria-label="Quitar">✕</button>`;
+      fila.querySelector(".fj-quitar").onclick=()=>{fj.propiedades.splice(i,1);guardarFj();refrescarForja(true)};
+      const det=fila.querySelector(".fj-detalle");if(det)det.oninput=()=>{p.texto=det.value;guardarFj();refrescarForja(false)};
+      const fr=fila.querySelector(".fj-frec");if(fr)fr.onclick=()=>elegirFrecuencia(p.conjuro,f=>{p.frecuencia=f;guardarFj();refrescarForja(true)});
+      cont.appendChild(fila)});
+  }
+  document.querySelectorAll("#fjProps .fj-prop").forEach(fila=>{const paso=calc&&calc.pasos[Number(fila.dataset.i)+1];if(!paso)return;
+    const p=fj.propiedades[Number(fila.dataset.i)];
+    fila.querySelector(".fj-texto").textContent=paso.consulta?"Propiedad especial":p.tipo==="conjuro"?paso.concepto.replace(p.frecuencia,nombreFrec(p.frecuencia)):paso.concepto;
+    fila.querySelector(".fj-fuente").textContent=paso.consulta?"La valora el DM con la tabla de poder de la Guía del DM; su precio llega con la respuesta.":paso.fuente;
+    fila.querySelector(".fj-po").innerHTML=paso.consulta?`<span class="fj-fuente">por valorar</span>`:`${chipF(paso.rareza)}<div class="mono">${cifraF(paso.po)} po</div>`});
+  const r=calc&&calc.rareza;
+  $("fjResumen").innerHTML=calc?`<div class="fj-total">${cifraF(calc.precio_po)} po</div>${calc.consultas||calc.base.pedida?`<div class="fj-fuente">más lo que valore el DM${calc.base.pedida?" (base":""}${calc.base.pedida&&calc.consultas?" y ":calc.base.pedida?")":""}${calc.consultas?`${calc.base.pedida?"":" ("}${calc.consultas} propiedad${calc.consultas>1?"es":""} especial${calc.consultas>1?"es":""})`:""}</div>`:""}
+    <div>${r?chipF(r):`<span class="fj-fuente">Sin componentes todavía</span>`}${calc.semanas?` <span class="fj-fuente">· ${calc.semanas} semanas de trabajo</span>`:""}${fj.consumible?` <span class="fj-fuente">· de un solo uso: mitad de precio por componente</span>`:""}</div>`
+    :`<div class="fj-fuente">${error?"No se pudo calcular: "+esc(error):"Elige una base para empezar."}</div>`;
+  pintarDibujoF(calc?calc.base:null,r);
+  const consultasVacias=fj.propiedades.some(p=>p.tipo==="consulta"&&!String(p.texto||"").trim());
+  $("fjEncargar").disabled=!(calc&&fj.nombre.trim()&&fj.propiedades.length&&!consultasVacias&&(fj.base||String(fj.base_pedida||"").trim()));
+}
+
+function pintarDibujoF(base,rareza){
+  const cv=$("fjDibujo"),ctx=cv.getContext("2d");ctx.clearRect(0,0,16,16);if(!base)return;
+  const pl=forjaCat.dibujos[base.figura||figuraF(forjaCat,base.nombre)],brillo=forjaCat.colores_rareza[rareza||"comun"];
+  const hx=(h,a=255)=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16),a];
+  const cuero=base.cuero??["cuero","capa","tunica","botas"].some(x=>normF(base.nombre).includes(x));
+  const pal={"#":hx("#1b1b22"),m:hx("#b9c0c9"),h:hx(cuero?"#5a3a26":"#7a4a2a"),g:hx(brillo),s:hx("#e8e2d0"),".":[0,0,0,0]};
+  const img=ctx.createImageData(16,16),halo=hx(brillo,90);
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){let c=pal[pl[y][x]];
+    if(c[3]===0&&[[0,1],[1,0],[0,-1],[-1,0]].some(([dy,dx])=>(pl[y+dy]||"")[x+dx]==="#"))c=halo;
+    img.data.set(c,(y*16+x)*4)}
+  ctx.putImageData(img,0,0);
+}
+
+function precioDe(p){try{return componenteF(forjaCat,p,fj.base?forjaCat.bases.find(b=>b.nombre===fj.base):{nombre:fj.base_pedida||""})}catch(e){return null}}
+function agregarF(p){fj.propiedades.push(p);guardarFj();refrescarForja(true)}
+function elegirFrecuencia(conjuro,listo){
+  const op=f=>{const c=precioDe({tipo:"conjuro",conjuro,frecuencia:f});return c?`${nombreFrec(f)} — ${cifraF(c.po)} po`:nombreFrec(f)};
+  abrirHoja(`${conjuro}: ¿cuántas veces?`,[{t:op("1/dia"),v:"1/dia"},{t:op("a voluntad"),v:"a voluntad"},{t:"Con cargas…",v:"cargas"}],v=>{
+    if(v!=="cargas")return listo(v);
+    abrirHoja("¿Cuántas cargas?",Array.from({length:10},(_,i)=>({t:`${i+1} carga${i?"s":""}`,v:i+1})),n=>
+      abrirHoja(`${n} carga${n>1?"s":""}: ¿cuántas recupera al amanecer?`,forjaCat.recargas.filter(r=>r==="todas"||usosF(`${n} cargas (${r})`,{a_voluntad:0,plus_por_carga_acumulada:0})<n)
+        .map(r=>({t:op(`${n} cargas (${r})`),v:`${n} cargas (${r})`})),listo))});
+}
+
+$("fjBase").onclick=()=>abrirBuscador("Base del objeto",[{t:"Otra base (el DM fija su precio)",d:"corona, botas, capa…",v:null},
+  ...forjaCat.bases.map(b=>({t:b.nombre,d:`${cifraF(b.precio_po)} po${b.categoria?" · "+b.categoria:""}`,v:b.nombre}))],v=>{
+  if(v===null){fj.base=null;fj.base_pedida=fj.base_pedida||"";$("fjPedida").value=fj.base_pedida}else{fj.base=v;fj.base_pedida=null}
+  guardarFj();refrescarForja(true)});
+$("fjPedida").oninput=()=>{fj.base_pedida=$("fjPedida").value;guardarFj();refrescarForja(false)};
+$("fjNombre").oninput=()=>{fj.nombre=$("fjNombre").value;guardarFj();refrescarForja(false)};
+$("fjEstetica").oninput=()=>{fj.estetica=$("fjEstetica").value;guardarFj()};
+$("fjNota").oninput=()=>{fj.nota=$("fjNota").value;guardarFj()};
+$("fjConsumible").onchange=()=>{fj.consumible=$("fjConsumible").checked;guardarFj();refrescarForja(true)};
+$("fjAddComp").onclick=()=>abrirBuscador("Componente",forjaCat.componentes.map(c=>({t:c.texto,d:`${rarezaF(c.rareza)} · ${cifraF(c.po)} po`,v:c.id})),id=>agregarF({tipo:"componente",id}));
+$("fjAddBono").onclick=()=>abrirHoja("Bonificador a…",forjaCat.bonificables.map(a=>({t:NOMBRE_BONO[a]||a,v:a})),a=>
+  abrirHoja(`${NOMBRE_BONO[a]||a}: ¿cuánto?`,[1,2,3,4].map(n=>{const c=precioDe({tipo:"bono",a,valor:n});
+    return {t:c?`+${n} — ${rarezaF(c.rareza)} · ${cifraF(c.po)} po`:`+${n} — no existe en las reglas`,v:n,no:!c}}),valor=>agregarF({tipo:"bono",a,valor})));
+$("fjAddConj").onclick=()=>abrirBuscador("Conjuro que lanza el objeto",forjaCat.conjuros.map(c=>({t:c.nombre,d:`${c.nivel?"nivel "+c.nivel:"truco"} · desde ${rarezaF(c.rareza)}`,v:c.nombre})),
+  conjuro=>elegirFrecuencia(conjuro,frecuencia=>agregarF({tipo:"conjuro",conjuro,frecuencia})));
+$("fjAddComo").onclick=()=>abrirBuscador("Que haga lo que hace…",forjaCat.como.map(o=>({t:o.nombre,d:`${rarezaF(o.rareza)} · ${cifraF(o.po)} po`,v:o.nombre})),objeto=>agregarF({tipo:"como",objeto}));
+$("fjAddEsp").onclick=()=>{agregarF({tipo:"consulta",texto:""});const t=[...document.querySelectorAll("#fjProps textarea")].pop();if(t)t.focus()};
+$("fjNuevo").onclick=()=>{fj=fjNuevo();envioForja=null;guardarFj();$("fjEstado").textContent="";armarForja()};
+$("fjEncargar").onclick=async()=>{
+  const calc=calcularF(forjaCat,fj),est=$("fjEstado");
+  if(!envioForja){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",nombre:fj.nombre.trim(),
+    base:fj.base,base_pedida:fj.base?null:String(fj.base_pedida||"").trim(),consumible:fj.consumible,estetica:fj.estetica.trim(),nota:fj.nota.trim(),
+    propiedades:fj.propiedades.map(p=>Object.assign({},p,p.texto!==undefined?{texto:String(p.texto).trim()}:{})),precio_app:calc.precio_po,rareza_app:calc.rareza,ts}}}
+  est.className="estado";est.textContent="Enviando…";$("fjEncargar").disabled=true;
+  try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioForja.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"encargo de forja",content:b64(JSON.stringify(envioForja.t))})});
+    if(!r.ok)throw new Error("HTTP "+r.status);envioForja=null;est.className="estado ok";est.textContent="Encargo enviado: el DM lo revisa y te responde en la mesa.";refrescarForja(false)}
+  catch(e){$("fjEncargar").disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo.`}};
+$("abrirForja").addEventListener("click",()=>{$("forja").hidden=false;document.body.style.overflow="hidden";if(forjaCat)armarForja();else cargarForja()});
+$("cerrarForja").addEventListener("click",()=>{$("forja").hidden=true;document.body.style.overflow=""});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("forja").hidden&&!document.querySelector(".hoja-fondo"))$("cerrarForja").click()});
 
 
 arrancar();
