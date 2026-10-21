@@ -1244,6 +1244,7 @@ $("notas").oninput=ev=>{form.notas=ev.target.value};
 $("levantar").addEventListener("input",()=>{revisar();if(combate&&combate.mapa)pintarMapa()});
 function pintarPasos(){
   const s=combate&&combate.shalock;if(!s)return;
+  if(document.querySelector("#pasos .arrastrando"))return;  // no rehacer la lista con un paso a medio arrastrar
   // Los campos de acción y adicional se guardan aparte mientras se rehace la lista.
   $("guardaPasos").append($("cfgAdicional"),$("cfgAccion"));
   const nombreDe=sel=>{const o=[...$(sel).options].find(o=>o.value===$(sel).value);return o&&o.value?o.text:""};
@@ -1323,7 +1324,11 @@ function distanciaAlAtacar(obj){
 function enemigoJunto(){
   if(combate.mapa){const o=origenAtaque();return combate.combatientes.some(c=>c.bando==="enemigo"&&c.activo&&c.pos&&o&&distHex(o,c.pos)<=1&&!(c.condiciones||[]).includes("inconsciente"))}
   return combate.combatientes.some(c=>c.bando==="enemigo"&&c.activo&&c.distancia!=null&&c.distancia<=5)}
+function ordenDePantalla(){
+  const ids=[...document.querySelectorAll("#pasos .paso")].map(f=>f.dataset.id);
+  if(ids.length===pasos.length&&pasos.every(x=>ids.includes(x.id)))pasos.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id))}
 function movimientoElegido(){
+  ordenDePantalla();
   const s=combate.shalock, mv=[];
   if($("levantar").checked&&!$("lblLevantar").hidden)mv.push({tipo:"levantarse"});
   // Un movimiento por paso, en el orden de la lista; «paso» indica su lugar en la secuencia.
@@ -1594,6 +1599,7 @@ function resumen(t){
 }
 
 async function enviarTurno(parcial){
+  ordenDePantalla();
   if(!envioTurno){if(!revisar())return;const ts=Date.now();envioTurno={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:Object.assign(tirarTurno(),{parcial})}}
   const t=envioTurno.t, est=$("estadoTurno");
   $("resTurno").textContent=resumen(t);
