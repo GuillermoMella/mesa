@@ -1523,6 +1523,9 @@ function pintarDano(){
   const v=combate.resolucion&&combate.resolucion.tirada===enCurso.tirada?combate.resolucion:null;
   p.hidden=false;
   const nombreBlanco=String(enCurso.objetivo).startsWith("@")?`el hexágono ${enCurso.objetivo.slice(1)}`:enCurso.objetivo;
+  // Ya enviado: el resultado queda a la vista hasta que el jugador apriete «Listo» (antes se borraba al instante).
+  if(enCurso.enviado){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: daño enviado al DM.`;$("opcDano").hidden=true;
+    $("resDano").textContent=enCurso.resumen||"";$("cerrarDano").hidden=false;return}
   if(!v){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: ${enCurso.total}. Esperando si impacta…`;$("opcDano").hidden=true;return}
   $("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: `+(v.critico?"¡CRÍTICO!":v.impacta?"impactas.":"fallas.")+(v.reaccion?` ${v.reaccion}.`:"");
   $("opcDano").hidden=!v.impacta;
@@ -1537,7 +1540,7 @@ function pintarDano(){
 const opcionalImpacto=a=>a&&a.clase==="arma"?((combate.shalock.al_impactar||{}).opcionales||[]).find(o=>o.coste==="espacio"):null;
 function dadosOpcional(op,nivel){const m=/^(\d+)d(\d+)$/.exec(op.dados),q=/^(\d+)d/.exec(op.por_nivel||"0d");
   const n=Math.min(op.max_dados||99,Number(m[1])+Number(q[1])*(nivel-1));return`${n}d${m[2]}`}
-$("cerrarDano").onclick=()=>{enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;pintarDano()};
+$("cerrarDano").onclick=()=>{enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano()};
 $("tirarDano").addEventListener("click",async()=>{
   const v=combate.resolucion, a=ataque(enCurso.id), ef=enCurso.efectos||{}, crit=!!v.critico, obj=enCurso.objetivo;
   if(!enCurso.dano){
@@ -1561,7 +1564,7 @@ $("tirarDano").addEventListener("click",async()=>{
   try{
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${enCurso.dano.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"daño de Shalock",content:b64(JSON.stringify(t))})});
     if(!r.ok)throw new Error("HTTP "+r.status);
-    enCurso=null;guardarEnCurso();est.className="estado ok";est.textContent="Daño enviado al DM.";$("castigoDano").checked=false;pintarDano();
+    enCurso.enviado=true;enCurso.resumen=$("resDano").textContent;guardarEnCurso();est.className="estado ok";est.textContent="";$("castigoDano").checked=false;pintarDano();
   }catch(e){est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo daño.`}
 });
 
