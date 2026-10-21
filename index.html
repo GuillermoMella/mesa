@@ -284,6 +284,9 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .fj-fuente{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
 .fj-add{display:flex;flex-wrap:wrap;gap:6px}
 .fj-lista{display:grid;gap:6px}
+.fj-taller{display:grid;grid-template-columns:1fr 1fr;gap:6px}.fj-taller button{width:100%;padding:10px}
+.fj-taller button.actual{border-color:var(--ember);color:var(--fg);background:var(--sel);font-weight:700}
+.fj-contra{font-size:.85rem;color:var(--warn)}
 .forja label.check{display:flex;gap:8px;align-items:center;color:var(--fg)}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
 </style>
@@ -311,14 +314,21 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="forja">
       <div class="estado" id="fjCarga"></div>
       <div id="fjCuerpo" class="forja" hidden>
+        <div class="fj-taller" id="fjTaller" role="group" aria-label="Taller"><button type="button" class="sec" data-t="magico">Herrero mágico</button><button type="button" class="sec" data-t="herrero">Herrero</button></div>
         <section class="panel">
           <div class="fj-cab"><canvas id="fjDibujo" width="16" height="16" aria-label="Dibujo del objeto"></canvas><div id="fjResumen"></div></div>
           <label for="fjNombre">Nombre del objeto<input id="fjNombre" autocomplete="off" placeholder="Como lo quieras llamar"></label>
           <label>Base<button type="button" class="selbtn" id="fjBase"></button></label>
           <label id="fjFilaPedida" for="fjPedida" hidden>¿Qué objeto? (el DM fija su precio)<input id="fjPedida" autocomplete="off" placeholder="Corona de plata, botas de montar…"></label>
-          <label class="check"><input type="checkbox" id="fjConsumible"> De un solo uso (consumible)</label>
+          <label class="check" id="fjFilaConsumible"><input type="checkbox" id="fjConsumible"> De un solo uso (consumible)</label>
         </section>
-        <section class="panel">
+        <section class="panel" id="fjSecHerrero" hidden>
+          <div class="eyebrow">Mejoras del herrero</div>
+          <div class="fj-fuente">Sin magia: no piden sintonización ni se disipan. Las simples son baratas y traen su contrapartida; las finas se pagan por lo que rinden y una contrapartida opcional las abarata hasta la mitad.</div>
+          <div id="fjMejoras"></div>
+          <div class="fj-add"><button type="button" class="sec" id="fjAddMejora">+ Mejora</button><button type="button" class="sec" id="fjAddPedido">+ Pedido especial</button></div>
+        </section>
+        <section class="panel" id="fjSecMagia">
           <div class="eyebrow">Propiedades</div>
           <div id="fjProps"></div>
           <div class="fj-add"><button type="button" class="sec" id="fjAddComp">+ Componente</button><button type="button" class="sec" id="fjAddBono">+ Bonificador</button><button type="button" class="sec" id="fjAddConj">+ Conjuro</button><button type="button" class="sec" id="fjAddComo">+ Como un objeto</button><button type="button" class="sec" id="fjAddEsp">+ Propiedad especial</button></div>
@@ -1687,14 +1697,31 @@ function calcularF(cat,ficha){
     pasos.push({concepto:c.texto,rareza:c.rareza,po,acumulado:r2F(total),fuente:c.fuente})}
   const rareza=rar.length?rar.reduce((a,b)=>cat.orden.indexOf(b)>cat.orden.indexOf(a)?b:a):null;
   return {base,pasos,precio_po:r2F(total),rareza,semanas,consultas}}
+function calcularHerreroF(cat,ficha){
+  const h=cat.herrero,base=ficha.base_pedida?{nombre:ficha.base_pedida,precio_po:0,pedida:true}:ficha.base?cat.bases.find(b=>b.nombre===ficha.base):null;
+  let total=base?base.precio_po:0,trabajo=0,consultas=0;
+  const pasos=base?[{concepto:"base: "+base.nombre,po:base.precio_po,acumulado:total,fuente:base.pedida?"el DM fija su precio":"PHB"}]:[];
+  const ids=(ficha.mejoras||[]).map(m=>m.id);
+  for(const m of ficha.mejoras||[]){
+    if(m.id==="consulta"){consultas++;pasos.push({concepto:m.texto,consulta:true});continue}
+    const d=h.mejoras.find(x=>x.id===m.id);if(!d)throw new Error("mejora «"+m.id+"»");
+    if(d.bases&&!(base&&d.bases.includes(base.nombre)))throw new Error(`«${d.nombre}» no va sobre ${base?base.nombre:"nada: elige una base"}`);
+    if(d.requiere_mejora&&!ids.includes(d.requiere_mejora))throw new Error(`«${d.nombre}» requiere ${h.mejoras.find(x=>x.id===d.requiere_mejora).nombre}`);
+    const extra=m.contrapartidas||[];if(extra.length&&d.clase!=="fino")throw new Error(`«${d.nombre}» ya trae su contrapartida`);
+    const resta=extra.reduce((a,x)=>a+h.contrapartidas[x.tipo].po,0),po=r2F(Math.max(d.precio_po/2,d.precio_po-resta));
+    trabajo+=po;total=r2F(total+po);
+    pasos.push({concepto:d.nombre,po,acumulado:total,fuente:d.fuente,ventaja:d.ventaja,
+      contrapartidas:[d.contrapartida,...extra.map(x=>h.contrapartidas[x.tipo].texto+(x.texto?": "+x.texto:""))].filter(Boolean)})}
+  return {base,pasos,precio_po:r2F(total),dias:Math.max(1,Math.ceil(trabajo*h.dias_por_semana/h.po_por_semana)),consultas,mejoras:ids.filter(x=>x!=="consulta").length}}
 // </forja-calculo>
 
 const cifraF=n=>{const [e,d]=Math.abs(n).toFixed(2).split(".");return (n<0?"−":"")+e.replace(/\B(?=(\d{3})+(?!\d))/g,".")+(d!=="00"?","+d:"")};
 const NOMBRE_BONO={ataque_y_dano:"Ataque y daño (arma)",ca:"Clase de armadura",salvaciones:"Tiradas de salvación",pruebas:"Pruebas de característica",cd_de_conjuros:"CD de conjuros",ataque_de_conjuros:"Ataque de conjuros"};
 let forjaCat=null, fj=null, envioForja=null;
-function fjNuevo(){return {nombre:"",base:null,base_pedida:null,propiedades:[],consumible:false,estetica:"",nota:""}}
+function fjNuevo(){return {taller:"magico",nombre:"",base:null,base_pedida:null,propiedades:[],mejoras:[],consumible:false,estetica:"",nota:""}}
 try{fj=JSON.parse(localStorage.getItem("mesa_forja")||"null")}catch(e){}
 if(!fj||!Array.isArray(fj.propiedades))fj=fjNuevo();
+if(!Array.isArray(fj.mejoras)){fj.mejoras=[];fj.taller=fj.taller||"magico"}
 function guardarFj(){try{localStorage.setItem("mesa_forja",JSON.stringify(fj))}catch(e){}}
 const rarezaF=r=>r?forjaCat.nombre_rareza[r]:"—";
 const chipF=r=>r?`<span class="fj-chip" style="--c:${forjaCat.colores_rareza[r]}">${esc(rarezaF(r))}</span>`:"";
@@ -1734,6 +1761,10 @@ function armarForja(){
 // todo=true repinta también la lista de propiedades (si no, solo los números, para no perder el foco al escribir).
 function refrescarForja(todo){
   if(!forjaCat)return;
+  const herr=fj.taller==="herrero";
+  $("fjSecMagia").hidden=herr;$("fjFilaConsumible").hidden=herr;$("fjSecHerrero").hidden=!herr;
+  document.querySelectorAll("#fjTaller button").forEach(b=>b.classList.toggle("actual",b.dataset.t===(herr?"herrero":"magico")));
+  if(herr)return refrescarHerrero(todo);
   let calc=null,error="";
   try{calc=calcularF(forjaCat,fj)}catch(e){error=e.message}
   $("fjBase").innerHTML=fj.base?`<span>${esc(fj.base)}</span><span class="fj-fuente">${cifraF(calc?calc.base.precio_po:0)} po</span>`:fj.base_pedida!==null?"<span>Otra base: el DM fija su precio</span>":"<span>Elegir la base…</span>";
@@ -1765,6 +1796,43 @@ function refrescarForja(todo){
   $("fjEncargar").disabled=!(calc&&fj.nombre.trim()&&fj.propiedades.length&&!consultasVacias&&(fj.base||String(fj.base_pedida||"").trim()));
 }
 
+function refrescarHerrero(todo){
+  let calc=null,error="";
+  try{calc=calcularHerreroF(forjaCat,fj)}catch(e){error=e.message}
+  $("fjBase").innerHTML=fj.base?`<span>${esc(fj.base)}</span><span class="fj-fuente">${cifraF(forjaCat.bases.find(b=>b.nombre===fj.base).precio_po)} po</span>`:fj.base_pedida!==null?"<span>Otra base: el DM fija su precio</span>":"<span>Sin base (pieza propia o sobre lo que llevas)</span>";
+  $("fjFilaPedida").hidden=fj.base_pedida===null;
+  const h=forjaCat.herrero,cont=$("fjMejoras");
+  if(todo){cont.innerHTML="";
+    fj.mejoras.forEach((m,i)=>{const d=h.mejoras.find(x=>x.id===m.id),fila=document.createElement("div");fila.className="fj-prop";fila.dataset.i=i;
+      if(m.id==="consulta")fila.innerHTML=`<div><div class="fj-texto">Pedido especial</div><div class="fj-fuente">Lo clasifico (simple o fino) y valoro con la misma regla; queda en el menú.</div>
+        <textarea class="fj-detalle" rows="2" placeholder="Qué quieres y sobre qué pieza">${esc(m.texto||"")}</textarea></div><div class="fj-po"><span class="fj-fuente">por valorar</span></div><button type="button" class="sec fj-quitar" aria-label="Quitar">✕</button>`;
+      else{fila.innerHTML=`<div><div class="fj-texto">${esc(d.nombre)} <span class="fj-fuente">· ${d.clase==="simple"?"simple":"fino"}${d.pieza?" · "+esc(d.pieza):""}</span></div>
+        <div class="fj-fuente">Da: ${esc(d.ventaja)}</div>${d.contrapartida?`<div class="fj-contra">A cambio: ${esc(d.contrapartida)}</div>`:""}
+        ${(m.contrapartidas||[]).map((x,j)=>`<div class="fj-contra">A cambio (${esc(h.contrapartidas[x.tipo].texto)}, −${cifraF(h.contrapartidas[x.tipo].po)} po):
+          <input class="fj-detalle" data-j="${j}" placeholder="¿Cuál? (habilidad o situación)" value="${esc(x.texto||"")}"> <button type="button" class="sec fj-quitar-c" data-j="${j}">Quitar</button></div>`).join("")}
+        ${d.clase==="fino"?`<button type="button" class="sec fj-add-c">+ Contrapartida (abarata)</button>`:""}<div class="fj-fuente fj-origen"></div></div>
+        <div class="fj-po"></div><button type="button" class="sec fj-quitar" aria-label="Quitar">✕</button>`}
+      fila.querySelector(".fj-quitar").onclick=()=>{const quita=m.id;fj.mejoras.splice(i,1);
+        fj.mejoras=fj.mejoras.filter(x=>{const dx=h.mejoras.find(y=>y.id===x.id);return !(dx&&dx.requiere_mejora===quita)});guardarFj();refrescarForja(true)};
+      const ta=fila.querySelector("textarea");if(ta)ta.oninput=()=>{m.texto=ta.value;guardarFj();refrescarForja(false)};
+      fila.querySelectorAll("input.fj-detalle").forEach(inp=>inp.oninput=()=>{m.contrapartidas[Number(inp.dataset.j)].texto=inp.value;guardarFj();refrescarForja(false)});
+      fila.querySelectorAll(".fj-quitar-c").forEach(b=>b.onclick=()=>{m.contrapartidas.splice(Number(b.dataset.j),1);guardarFj();refrescarForja(true)});
+      const ac=fila.querySelector(".fj-add-c");if(ac)ac.onclick=()=>abrirHoja("Contrapartida que aceptas",Object.entries(h.contrapartidas).map(([k,x])=>({t:`${x.texto} (−${cifraF(x.po)} po)`,v:k})),
+        tipo=>{(m.contrapartidas=m.contrapartidas||[]).push({tipo,texto:""});guardarFj();refrescarForja(true)});
+      cont.appendChild(fila)})}
+  let k=base0(calc);
+  cont.querySelectorAll(".fj-prop").forEach(fila=>{const m=fj.mejoras[Number(fila.dataset.i)],paso=calc&&calc.pasos[k++];if(m.id==="consulta"||!paso)return;
+    fila.querySelector(".fj-po").innerHTML=`<div class="mono">${cifraF(paso.po)} po</div>`;fila.querySelector(".fj-origen").textContent=paso.fuente});
+  $("fjResumen").innerHTML=calc?`<div class="fj-total">${cifraF(calc.precio_po)} po</div>${calc.consultas||(calc.base&&calc.base.pedida)?`<div class="fj-fuente">más lo que valore el DM</div>`:""}
+    <div class="fj-fuente">Herrero · sin magia${calc.mejoras?` · ${calc.dias} día${calc.dias>1?"s":""} de trabajo`:""}</div>`
+    :`<div class="fj-fuente">No se pudo calcular: ${esc(error)}</div>`;
+  pintarDibujoF(calc&&calc.base?calc.base:{nombre:fj.nombre||"guante"},null);
+  const vacias=fj.mejoras.some(m=>m.id==="consulta"&&!String(m.texto||"").trim())||fj.mejoras.some(m=>(m.contrapartidas||[]).some(x=>!String(x.texto||"").trim()));
+  $("fjEncargar").disabled=!(calc&&fj.nombre.trim()&&fj.mejoras.length&&!vacias&&(fj.base_pedida===null||String(fj.base_pedida).trim()));
+}
+// Los pasos del herrero empiezan después de la base (si la hay) y saltan los pedidos especiales.
+function base0(calc){return calc&&calc.base?1:0}
+
 function pintarDibujoF(base,rareza){
   const cv=$("fjDibujo"),ctx=cv.getContext("2d");ctx.clearRect(0,0,16,16);if(!base)return;
   const pl=forjaCat.dibujos[base.figura||figuraF(forjaCat,base.nombre)],brillo=forjaCat.colores_rareza[rareza||"comun"];
@@ -1791,12 +1859,12 @@ function elegirFrecuencia(conjuro,listo){
 
 // Base en dos pasos: primero el grupo (armas, armaduras…), después el objeto con buscador.
 function elegirBaseF(v){
-  if(v===null){fj.base=null;fj.base_pedida=fj.base_pedida||"";$("fjPedida").value=fj.base_pedida}else{fj.base=v;fj.base_pedida=null}
+  if(v==="__ninguna"){fj.base=null;fj.base_pedida=null}else if(v===null){fj.base=null;fj.base_pedida=fj.base_pedida||"";$("fjPedida").value=fj.base_pedida}else{fj.base=v;fj.base_pedida=null}
   guardarFj();refrescarForja(true)}
 $("fjBase").onclick=()=>{const grupos=forjaCat.grupos_base||[...new Set(forjaCat.bases.map(b=>b.grupo))];
   abrirHoja("¿Qué tipo de objeto?",[...grupos.map(g=>({t:`${g} (${forjaCat.bases.filter(b=>b.grupo===g).length})`,v:g})),
-    {t:"Otro objeto que no está (el DM fija su precio)",v:null}],g=>{
-    if(g===null)return elegirBaseF(null);
+    {t:"Otro objeto que no está (el DM fija su precio)",v:null},...(fj.taller==="herrero"?[{t:"Sin base (pieza propia o sobre lo que llevas)",v:"__ninguna"}]:[])],g=>{
+    if(g===null||g==="__ninguna")return elegirBaseF(g);
     abrirBuscador(g,forjaCat.bases.filter(b=>b.grupo===g).map(b=>({t:b.nombre,d:`${cifraF(b.precio_po)} po`,v:b.nombre})),elegirBaseF)})};
 $("fjPedida").oninput=()=>{fj.base_pedida=$("fjPedida").value;guardarFj();refrescarForja(false)};
 $("fjNombre").oninput=()=>{fj.nombre=$("fjNombre").value;guardarFj();refrescarForja(false)};
@@ -1812,9 +1880,18 @@ $("fjAddConj").onclick=()=>abrirBuscador("Conjuro que lanza el objeto",forjaCat.
 $("fjAddComo").onclick=()=>abrirBuscador("Que haga lo que hace…",forjaCat.como.map(o=>({t:o.nombre,d:`${rarezaF(o.rareza)} · ${cifraF(o.po)} po`,v:o.nombre})),objeto=>agregarF({tipo:"como",objeto}));
 $("fjAddEsp").onclick=()=>{agregarF({tipo:"consulta",texto:""});const t=[...document.querySelectorAll("#fjProps textarea")].pop();if(t)t.focus()};
 $("fjNuevo").onclick=()=>{fj=fjNuevo();envioForja=null;guardarFj();$("fjEstado").textContent="";armarForja()};
+document.querySelectorAll("#fjTaller button").forEach(b=>b.onclick=()=>{fj.taller=b.dataset.t;envioForja=null;guardarFj();refrescarForja(true)});
+$("fjAddMejora").onclick=()=>{const h=forjaCat.herrero,base=fj.base?forjaCat.bases.find(b=>b.nombre===fj.base):null,ids=fj.mejoras.map(m=>m.id);
+  abrirHoja("Mejora",h.mejoras.map(d=>{const no=ids.includes(d.id)?"ya está":d.bases&&!(base&&d.bases.includes(base.nombre))?(base?"no va sobre "+base.nombre:"necesita una base"):
+      d.requiere_mejora&&!ids.includes(d.requiere_mejora)?"requiere "+h.mejoras.find(x=>x.id===d.requiere_mejora).nombre:"";
+    return {t:`${d.nombre} — ${cifraF(d.precio_po)} po · ${d.clase}${no?` (${no})`:""}`,v:d.id,no:!!no}}),id=>{fj.mejoras.push({id});guardarFj();refrescarForja(true)})};
+$("fjAddPedido").onclick=()=>{fj.mejoras.push({id:"consulta",texto:""});guardarFj();refrescarForja(true);const t=[...document.querySelectorAll("#fjMejoras textarea")].pop();if(t)t.focus()};
 $("fjEncargar").onclick=async()=>{
-  const calc=calcularF(forjaCat,fj),est=$("fjEstado");
-  if(!envioForja){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",nombre:fj.nombre.trim(),
+  const herr=fj.taller==="herrero",calc=herr?calcularHerreroF(forjaCat,fj):calcularF(forjaCat,fj),est=$("fjEstado");
+  if(!envioForja&&herr){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",taller:"herrero",nombre:fj.nombre.trim(),
+    base:fj.base,base_pedida:fj.base_pedida===null?null:String(fj.base_pedida).trim(),estetica:fj.estetica.trim(),nota:fj.nota.trim(),
+    mejoras:fj.mejoras.map(m=>JSON.parse(JSON.stringify(m))),precio_app:calc.precio_po,ts}}}
+  if(!envioForja){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",taller:"magico",nombre:fj.nombre.trim(),
     base:fj.base,base_pedida:fj.base?null:String(fj.base_pedida||"").trim(),consumible:fj.consumible,estetica:fj.estetica.trim(),nota:fj.nota.trim(),
     propiedades:fj.propiedades.map(p=>Object.assign({},p,p.texto!==undefined?{texto:String(p.texto).trim()}:{})),precio_app:calc.precio_po,rareza_app:calc.rareza,ts}}}
   est.className="estado";est.textContent="Enviando…";$("fjEncargar").disabled=true;
