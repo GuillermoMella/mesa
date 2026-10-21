@@ -102,7 +102,8 @@ select.oculto{display:none}
 .selbtn{background:var(--bg);color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px}
 .selbtn::after{content:"▸";color:var(--muted)}
 .selbtn:disabled{opacity:.5}
-.hoja-fondo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+/* Las listas emergentes van sobre todo, también sobre la hoja de personaje y la forja (z-index 60). */
+.hoja-fondo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;display:flex;align-items:flex-end;justify-content:center}
 .hoja{background:var(--panel);border:1px solid var(--line);border-radius:12px 12px 0 0;width:100%;max-width:560px;max-height:75vh;overflow:auto;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
 .hoja .eyebrow{padding:0 4px}
 .hoja button{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:400;text-align:left}
@@ -270,7 +271,6 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .sub:empty{display:none}
 .fila{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 /* Forja */
-.hoja-fondo{z-index:70}
 .forja{max-width:760px;margin:0 auto;display:grid;gap:12px}
 .forja textarea,.hoja input[type=search]{font:inherit;font-size:.9rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
 .fj-cab{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center}
@@ -541,7 +541,7 @@ function salpicar(papel){papel.querySelectorAll(".gota").forEach(g=>g.remove());
 $("estiloHoja").addEventListener("click",()=>{$("panelEstiloHoja").hidden=!$("panelEstiloHoja").hidden});
 $("abrirHoja").addEventListener("click",()=>{$("hoja").hidden=false;document.body.style.overflow="hidden";pintarHoja()});
 $("cerrarHoja").addEventListener("click",()=>{$("hoja").hidden=true;document.body.style.overflow=""});
-document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden)$("cerrarHoja").click()});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden&&!document.querySelector(".hoja-fondo"))$("cerrarHoja").click()});
 const pips=(q,m,cls="")=>`<span class="hp-pips ${cls}">${Array.from({length:m},(_,i)=>`<i class="${i<q?"lleno":""}"></i>`).join("")}</span>`;
 function pintarHoja(){
   const h=hojaPJ, P=$("papelHoja"); estiloHoja(); if(!h){P.innerHTML='<p class="hp-texto">Todavía no llegó la hoja.</p>';return}
