@@ -1789,10 +1789,15 @@ function elegirFrecuencia(conjuro,listo){
         .map(r=>({t:op(`${n} cargas (${r})`),v:`${n} cargas (${r})`})),listo))});
 }
 
-$("fjBase").onclick=()=>abrirBuscador("Base del objeto",[{t:"Otra base (el DM fija su precio)",d:"corona, botas, capa…",v:null},
-  ...forjaCat.bases.map(b=>({t:b.nombre,d:`${cifraF(b.precio_po)} po${b.categoria?" · "+b.categoria:""}`,v:b.nombre}))],v=>{
+// Base en dos pasos: primero el grupo (armas, armaduras…), después el objeto con buscador.
+function elegirBaseF(v){
   if(v===null){fj.base=null;fj.base_pedida=fj.base_pedida||"";$("fjPedida").value=fj.base_pedida}else{fj.base=v;fj.base_pedida=null}
-  guardarFj();refrescarForja(true)});
+  guardarFj();refrescarForja(true)}
+$("fjBase").onclick=()=>{const grupos=forjaCat.grupos_base||[...new Set(forjaCat.bases.map(b=>b.grupo))];
+  abrirHoja("¿Qué tipo de objeto?",[...grupos.map(g=>({t:`${g} (${forjaCat.bases.filter(b=>b.grupo===g).length})`,v:g})),
+    {t:"Otro objeto que no está (el DM fija su precio)",v:null}],g=>{
+    if(g===null)return elegirBaseF(null);
+    abrirBuscador(g,forjaCat.bases.filter(b=>b.grupo===g).map(b=>({t:b.nombre,d:`${cifraF(b.precio_po)} po`,v:b.nombre})),elegirBaseF)})};
 $("fjPedida").oninput=()=>{fj.base_pedida=$("fjPedida").value;guardarFj();refrescarForja(false)};
 $("fjNombre").oninput=()=>{fj.nombre=$("fjNombre").value;guardarFj();refrescarForja(false)};
 $("fjEstetica").oninput=()=>{fj.estetica=$("fjEstetica").value;guardarFj()};
