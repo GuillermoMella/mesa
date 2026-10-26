@@ -231,6 +231,7 @@ select.oculto{display:none}
 .carga-barra{flex:1 1 100%;height:6px;background:var(--line);border-radius:3px;overflow:hidden}.carga-barra i{display:block;height:100%}
 .lugar-nombre{font:600 9px var(--body);fill:#f2d06b;paint-order:stroke;stroke:#0e1116;stroke-width:3px;pointer-events:none}
 .lugar-piso{fill:#f2d06b;stroke:#0b0e13;stroke-width:1.2;pointer-events:none}
+.anotado-piso{fill:none;stroke:#e0a458;stroke-width:2;stroke-dasharray:3 2;pointer-events:none}
 .pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
 .ley-piso{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.85rem;margin-top:8px}.ley-piso i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
@@ -685,6 +686,8 @@ function pintarPiso(p){
   (p.enlaces||[]).forEach(([c1,r1,c2,r2,min,sent,req])=>{const rot=(req?`hay que ${req}`:"escalera")+`, ${min} min`;
     svg+=`<line x1="${cx(c1)}" y1="${cy(c1,r1)}" x2="${cx(c2)}" y2="${cy(c2,r2)}" class="enlace-piso"><title>${esc(rot)}</title></line>`
       +`<text x="${(cx(c1)+cx(c2))/2+4}" y="${(cy(c1,r1)+cy(c2,r2))/2-3}" class="enlace-nombre">${esc(rot)}</text>`});
+  // Lo visto de lejos o contado: un círculo hueco con su nota (puede ser falso).
+  (p.anotados||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r);svg+=`<circle cx="${X}" cy="${Y}" r="6" class="anotado-piso"><title>${esc(n)}</title></circle>`});
   (p.lugares||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r)-R*0.45;svg+=`<polygon points="${X},${Y-5} ${X+5},${Y} ${X},${Y+5} ${X-5},${Y}" class="lugar-piso"><title>${esc(n)}</title></polygon>`
     +`<text x="${X+7}" y="${Y+3}" class="lugar-nombre">${esc(n)}</text>`});
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
@@ -700,7 +703,7 @@ function pintarPiso(p){
   const pf=p.pregunta_forzada; $("preguntaForzada").hidden=!pf;
   if(pf){const r=rutaPiso(p,p.pos,pf.destino.split(",").map(Number),pf.ritmo);
     $("textoForzada").textContent=`Iban hacia ${pf.destino}; les faltan ${r?horasTexto(r.horas):"tramos que ya no ven"}. Seguir es marcha forzada, con riesgo de agotamiento.`}
-  $("leyPiso").innerHTML=((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugar que ya conocen</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
+  $("leyPiso").innerHTML=((p.anotados||[]).length?`<span><i style="background:transparent;border:2px dashed #e0a458;border-radius:50%"></i>visto de lejos o contado</span>`+p.anotados.map(([c,r,n])=>`<span>◌ ${c},${r}: ${esc(n)}</span>`).join(""):"")+((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugar que ya conocen</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
 
   $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
     selPiso=el.dataset.hp; pintarPiso(p)});
