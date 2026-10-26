@@ -303,7 +303,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 <div class="wrap">
   <header>
     <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
-    <div style="display:flex;gap:8px"><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="listo" style="width:auto;min-height:44px;padding:6px 14px">Listo</button><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
   </header>
 
   <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
@@ -706,6 +706,19 @@ function pintarPiso(p){
     selPiso=el.dataset.hp; pintarPiso(p)});
   preseleccion();
 }
+// «Listo»: avisa al DM que ya mandó lo de este turno (lo mismo que escribirlo en el chat). Despierta al DM una sola vez.
+$("listo").addEventListener("click",async()=>{
+  if(!cfg||!cfg.repo){$("conexion").textContent="Primero conecta la mesa";return}
+  const nota=window.prompt("¿Algo para el DM? (opcional)","");
+  if(nota===null)return;
+  const b=$("listo"),ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
+  b.disabled=true;
+  try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/listo/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"listo",content:b64(JSON.stringify({tipo:"listo",nota:nota.trim(),ts}))})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    $("conexion").textContent="Listo enviado: el DM ya fue avisado"}
+  catch(e){$("conexion").textContent="No se pudo enviar Listo ("+e.message+")"}
+  finally{setTimeout(()=>{b.disabled=false},3000)}
+});
 async function enviarExploracion(t){
   const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
   const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"exploración de Shalock",content:b64(JSON.stringify(t))})});
@@ -1192,7 +1205,9 @@ function pintarCombate(cb){
   if(eco.accion&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="accion"||(x.extra&&eco.ataques_restantes>0));
   if(eco.adicional&&tuyo2)pasos=pasos.filter(x=>x.tipo!=="adicional");
   pintarPasos();
+  // El blanco que se elige primero (acción adicional o acción) es el que trae por defecto el otro.
   if(!form.acManual&&form.c.ad_objetivo&&enemigos().includes(form.c.ad_objetivo))form.c.ac_objetivo=form.c.ad_objetivo;
+  else if(form.acManual&&!form.adManual&&form.c.ac_objetivo&&enemigos().includes(form.c.ac_objetivo))form.c.ad_objetivo=form.c.ac_objetivo;
   restaurar(); pintarMapa(); revisar(); pintarDano(); pintarReaccion();
 }
 
@@ -1264,9 +1279,9 @@ function campos(p,valor){
 }
 function restaurar(){document.querySelectorAll("[data-k]").forEach(el=>{const v=form.c[el.dataset.k];if(v===undefined)return;if(el.type==="checkbox")el.checked=v;else el.value=v});document.querySelectorAll("[data-k]").forEach(el=>{if(el.type!=="checkbox"&&form.c[el.dataset.k]===undefined)form.c[el.dataset.k]=el.value})}
 document.addEventListener("input",ev=>{const k=ev.target.dataset&&ev.target.dataset.k;if(!k)return;form.c[k]=ev.target.type==="checkbox"?ev.target.checked:ev.target.value;
-  // La acción apunta por defecto al blanco de la acción adicional, salvo que el jugador lo cambie.
-  if(k==="ac_objetivo")form.acManual=true;
-  if(k==="ad_objetivo"&&!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}if(k.endsWith("_espacio")||k.endsWith("_modo"))pintarCombate(combate);else revisar()});
+  // El blanco elegido primero, en la acción adicional o en la acción, es el que trae por defecto el otro.
+  if(k==="ac_objetivo"){form.acManual=true;if(!form.adManual){form.c.ad_objetivo=ev.target.value;pintarCombate(combate);return}}
+  if(k==="ad_objetivo"){form.adManual=true;if(!form.acManual){form.c.ac_objetivo=ev.target.value;pintarCombate(combate);return}}if(k.endsWith("_espacio")||k.endsWith("_modo"))pintarCombate(combate);else revisar()});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-apuntar]");if(!b)return;
   apuntando=b.dataset.apuntar;elegirPestana(esPC()?pestana:"turno");pintarMapa();$("panelMapa").scrollIntoView({behavior:"smooth",block:"center"})});
 $("selAdicional").onchange=ev=>{form.adicional=ev.target.value;pintarCombate(combate)};
@@ -1642,7 +1657,7 @@ async function enviarTurno(parcial){
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioTurno.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de Shalock",content:b64(JSON.stringify(t))})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
-    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
+    envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false,adManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
     $("enviarTurno").textContent="Enviar y terminar turno";
     est.className="estado ok";est.textContent=t.parcial?"Parte enviada: tu turno sigue abierto.":"Turno enviado al DM.";
     pintarCombate(combate);
