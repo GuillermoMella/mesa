@@ -680,14 +680,14 @@ function pintarPiso(p){
   $("tituloPiso").textContent=`Piso ${p.piso}`;
   const R=14, W=Math.sqrt(3)*R, cx=c=>R*1.5*c+R*1.2, cy=(c,r)=>W*(r+0.5*(c&1))+W*0.6;
   const pts=(c,r)=>[0,1,2,3,4,5].map(i=>{const a=Math.PI/3*i;return(cx(c)+R*Math.cos(a)).toFixed(1)+","+(cy(c,r)+R*Math.sin(a)).toFixed(1)}).join(" ");
-  const rec=new Set(p.recorridos.map(h=>h.join(","))), xs=p.hexes.map(h=>cx(h[0])), ys=p.hexes.map(h=>cy(h[0],h[1]));
+  const rec=new Set(p.recorridos.map(h=>h.join(","))), xs=[...p.hexes,...(p.anotados||[])].map(h=>cx(h[0])), ys=[...p.hexes,...(p.anotados||[])].map(h=>cy(h[0],h[1]));  // el encuadre incluye lo visto de lejos o contado
   const x0=Math.min(...xs)-R*1.5, y0=Math.min(...ys)-W, w=Math.max(...xs)-x0+R*1.5, h=Math.max(...ys)-y0+W;
   let svg=p.hexes.map(([c,r,t])=>`<polygon points="${pts(c,r)}" data-hp="${c},${r}" class="hxp ${rec.has(c+","+r)?"rec":""} ${selPiso===c+","+r?"sel":""}" style="fill:${p.terrenos[t].color}"><title>${esc(t.replace(/_/g," "))}</title></polygon>`).join("");
   (p.enlaces||[]).forEach(([c1,r1,c2,r2,min,sent,req])=>{const rot=(req?`hay que ${req}`:"escalera")+`, ${min} min`;
     svg+=`<line x1="${cx(c1)}" y1="${cy(c1,r1)}" x2="${cx(c2)}" y2="${cy(c2,r2)}" class="enlace-piso"><title>${esc(rot)}</title></line>`
       +`<text x="${(cx(c1)+cx(c2))/2+4}" y="${(cy(c1,r1)+cy(c2,r2))/2-3}" class="enlace-nombre">${esc(rot)}</text>`});
   // Lo visto de lejos o contado: un círculo hueco con su nota (puede ser falso).
-  (p.anotados||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r);svg+=`<circle cx="${X}" cy="${Y}" r="6" class="anotado-piso"><title>${esc(n)}</title></circle>`});
+  (p.anotados||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r);svg+=`<circle cx="${X}" cy="${Y}" r="6" class="anotado-piso"><title>${esc(n)}</title></circle><text x="${X+8}" y="${Y+3}" class="lugar-nombre">${esc(n.split(/[;(:]/)[0].trim())}</text>`});
   (p.lugares||[]).forEach(([c,r,n])=>{const X=cx(c),Y=cy(c,r)-R*0.45;svg+=`<polygon points="${X},${Y-5} ${X+5},${Y} ${X},${Y+5} ${X-5},${Y}" class="lugar-piso"><title>${esc(n)}</title></polygon>`
     +`<text x="${X+7}" y="${Y+3}" class="lugar-nombre">${esc(n)}</text>`});
   svg+=`<circle cx="${cx(p.pos[0])}" cy="${cy(p.pos[0],p.pos[1])}" r="${R*0.45}" class="pos-piso"/>`;
