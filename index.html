@@ -233,6 +233,8 @@ select.oculto{display:none}
 .eq-obj .eq-lugar{color:var(--ember);white-space:nowrap}.eq-obj.mov{border-color:var(--warn)}
 .eq-ataques{font-size:.82rem;color:var(--muted);margin:4px 0 0 16px;padding:0}
 .eq-cambios{margin:4px 0 8px 18px;padding:0;font-size:.88rem}.eq-cambios button{margin-left:8px;padding:0 6px}
+.conm{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:start;padding:8px 0;border-top:1px solid var(--line);cursor:pointer}
+.conm input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--ember)}.conm .estado{grid-column:2}
 .carga summary{cursor:pointer}.carga-persona{border-top:1px solid var(--line);padding:6px 0}
 .carga-persona summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
 .carga-persona ul{margin:6px 0 0 18px;padding:0;font-size:.85rem;color:var(--muted)}
@@ -502,6 +504,13 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="estadoTurno"></div>
   </section>
 
+  <section class="panel pane" id="panelConm" data-pane="turno" hidden>
+    <div class="eyebrow">Interruptores</div>
+    <div class="estado">Quedan como los dejes, también para los próximos combates. El motor los aplica solo en cada ataque.</div>
+    <div id="conmLista"></div>
+    <div class="estado" id="conmEstado"></div>
+  </section>
+
   <section class="panel pane" id="panelShalock" data-pane="shalock" hidden>
     <div class="eyebrow">Shalock</div>
     <div class="recursos" id="recursos"></div>
@@ -552,6 +561,7 @@ function pintar(e){
   pintarPiso(e.combate?null:(e.exploracion||null));
   pintarEquipo(e.equipo||null);
   hojaPJ=e.hoja||null; $("abrirHoja").hidden=!hojaPJ; if(!$("hoja").hidden)pintarHoja();
+  pintarConm();
 }
 
 
@@ -685,6 +695,18 @@ function preseleccion(){
   $("infoPiso").innerHTML=lineas.join("<br>");
   $("irPiso").disabled=false;
 }
+// ---- Interruptores (DGT-226): lo que el jugador deja decidido de antemano; quedan con su último estado ----
+let conmLocal={};
+function pintarConm(){
+  const lista=(hojaPJ&&hojaPJ.conmutadores)||[];$("panelConm").hidden=!lista.length;if(!lista.length)return;
+  // Mientras el cambio viaja, se muestra lo que tocó el jugador (hasta un minuto o hasta que la ficha lo confirme).
+  $("conmLista").innerHTML=lista.map(x=>{const l=conmLocal[x.id],act=l&&Date.now()-l.ts<60000?l.v:x.activo;if(l&&l.v===x.activo)delete conmLocal[x.id];
+    return `<label class="conm"><input type="checkbox" data-conm="${esc(x.id)}" ${act?"checked":""}><b>${esc(x.nombre)}</b><div class="estado">${esc(x.texto)}</div></label>`}).join("");
+  $("conmLista").querySelectorAll("[data-conm]").forEach(i=>i.onchange=async()=>{
+    const id=i.dataset.conm,v=i.checked;conmLocal[id]={v,ts:Date.now()};
+    try{await enviarExploracion({tipo:"conmutadores",valores:{[id]:v},ts:Date.now()});$("conmEstado").textContent="Guardado."}
+    catch(e){$("conmEstado").textContent=`No se pudo guardar (${e.message}).`;delete conmLocal[id];i.checked=!v}})}
+
 // ---- Equipo (DGT-225): equipado y portado de cada uno; los cambios se arman aquí y al confirmar el DM los aplica ----
 let equipoPub=null,equipoVista=null,equipoCambios=[];
 const EQ_CHOCA={armadura:["armadura"],escudo:["escudo","mano_secundaria","dos_manos"],mano_principal:["mano_principal","dos_manos"],
