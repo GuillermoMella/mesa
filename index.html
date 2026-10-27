@@ -690,13 +690,13 @@ let equipoPub=null,equipoVista=null,equipoCambios=[];
 const EQ_CHOCA={armadura:["armadura"],escudo:["escudo","mano_secundaria","dos_manos"],mano_principal:["mano_principal","dos_manos"],
   mano_secundaria:["mano_secundaria","escudo","dos_manos"],dos_manos:["dos_manos","mano_principal","mano_secundaria","escudo"],puesto:[]};
 const eqCopia=x=>JSON.parse(JSON.stringify(x));
-function eqSumar(lista,obj){const y=lista.find(z=>z.objeto===obj.objeto);if(y){y.cantidad=Math.round((y.cantidad+obj.cantidad)*100)/100;y.mov=true}else lista.push(Object.assign({},obj,{mov:true}))}
-function eqQuitar(lista,nombre,n){const y=lista.find(z=>z.objeto===nombre);if(!y)return null;const sale=Object.assign({},y,{cantidad:n});
-  y.cantidad=Math.round((y.cantidad-n)*100)/100;if(y.cantidad<=0)lista.splice(lista.indexOf(y),1);return sale}
+function eqSumar(lista,obj){const y=lista.find(z=>z.objeto===obj.objeto);if(y){y.cantidad=Math.round((y.cantidad+obj.cantidad)*100)/100;y.lb+=obj.lb||0;y.mov=true}else lista.push(Object.assign({},obj,{mov:true}))}
+function eqQuitar(lista,nombre,n){const y=lista.find(z=>z.objeto===nombre);if(!y)return null;const u=y.cantidad?y.lb/y.cantidad:0,sale=Object.assign({},y,{cantidad:n,lb:u*n});
+  y.cantidad=Math.round((y.cantidad-n)*100)/100;y.lb=u*y.cantidad;y.mov=true;if(y.cantidad<=0)lista.splice(lista.indexOf(y),1);return sale}
 // Vista previa: repite en el navegador lo que hará equipo.py (los lugares que chocan vuelven a portado). CA y ataques se recalculan al confirmar.
 function eqAplicar(v,c){const p=v.personas[c.persona];if(!p)return;
   if(c.tipo==="equipar"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})});
-    const o=eqQuitar(p.portado,c.objeto,1);if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb/(o.cantidad||1),lugares:o.lugares,mov:true})}
+    const o=eqQuitar(p.portado,c.objeto,1);if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb,lugares:o.lugares,mov:true})}
   if(c.tipo==="guardar"){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})}}
   if(c.tipo==="dar"){const q=v.personas[c.a];if(!q)return;let o=eqQuitar(p.portado,c.objeto,c.cantidad);
     if(!o){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);o={objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]}}}
