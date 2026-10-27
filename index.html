@@ -225,6 +225,14 @@ select.oculto{display:none}
 .hp-lista{margin:0;padding-left:1.1em;font-family:var(--mano);font-size:1.12rem;line-height:1.3}
 .enlace-piso{stroke:#e8e2d0;stroke-width:2;stroke-dasharray:4 3;pointer-events:none}
 .enlace-nombre{font:600 8px var(--body);fill:#e8e2d0;paint-order:stroke;stroke:#0e1116;stroke-width:3px;pointer-events:none}
+.eq-persona{border-top:1px solid var(--line);padding:8px 0}
+.eq-persona summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.eq-grupo{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:8px 0 4px}
+.eq-obj{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:3px 0;font-weight:400;font-size:.88rem}
+.eq-obj:disabled{opacity:1;cursor:default}
+.eq-obj .eq-lugar{color:var(--ember);white-space:nowrap}.eq-obj.mov{border-color:var(--warn)}
+.eq-ataques{font-size:.82rem;color:var(--muted);margin:4px 0 0 16px;padding:0}
+.eq-cambios{margin:4px 0 8px 18px;padding:0;font-size:.88rem}.eq-cambios button{margin-left:8px;padding:0 6px}
 .carga summary{cursor:pointer}.carga-persona{border-top:1px solid var(--line);padding:6px 0}
 .carga-persona summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
 .carga-persona ul{margin:6px 0 0 18px;padding:0;font-size:.85rem;color:var(--muted)}
@@ -402,13 +410,26 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   </div>
 
   <nav class="tabs" id="tabs" aria-label="Secciones" hidden>
-    <button data-tab="mesa">Mesa</button><button data-tab="mapa">Mapa</button><button data-tab="turno">Mi turno</button><button data-tab="shalock">Shalock</button><button data-tab="registro">Registro</button>
+    <button data-tab="mesa">Mesa</button><button data-tab="mapa">Mapa</button><button data-tab="turno">Mi turno</button><button data-tab="shalock">Shalock</button><button data-tab="equipo">Equipo</button><button data-tab="registro">Registro</button>
   </nav>
 
   <section class="panel pane" data-pane="mesa" aria-live="polite">
     <div class="eyebrow">Lo que dice el DM</div>
     <p id="mensaje">Conectando…</p>
     <div class="sub" id="panelSubida" hidden></div>
+  </section>
+
+  <section class="panel pane" data-pane="equipo" id="panelEquipo" hidden>
+    <div class="eyebrow">Equipo de la cuadrilla</div>
+    <div class="estado" id="equipoAviso"></div>
+    <div id="equipoLista"></div>
+    <div class="sub" id="equipoPendientes" hidden>
+      <div class="eyebrow">Cambios sin confirmar</div>
+      <ul class="eq-cambios" id="equipoCambios"></ul>
+      <button id="equipoConfirmar">Confirmar cambios</button>
+      <button class="sec" id="equipoDescartar">Descartar</button>
+    </div>
+    <div class="estado" id="equipoEstado"></div>
   </section>
 
   <section class="panel" id="panelPiso" hidden>
@@ -529,6 +550,7 @@ function pintar(e){
   pintarCombate(e.combate||null);
   pintarSubida(e.subida||null);
   pintarPiso(e.combate?null:(e.exploracion||null));
+  pintarEquipo(e.equipo||null);
   hojaPJ=e.hoja||null; $("abrirHoja").hidden=!hojaPJ; if(!$("hoja").hidden)pintarHoja();
 }
 
@@ -663,6 +685,57 @@ function preseleccion(){
   $("infoPiso").innerHTML=lineas.join("<br>");
   $("irPiso").disabled=false;
 }
+// ---- Equipo (DGT-225): equipado y portado de cada uno; los cambios se arman aquí y al confirmar el DM los aplica ----
+let equipoPub=null,equipoVista=null,equipoCambios=[];
+const EQ_CHOCA={armadura:["armadura"],escudo:["escudo","mano_secundaria","dos_manos"],mano_principal:["mano_principal","dos_manos"],
+  mano_secundaria:["mano_secundaria","escudo","dos_manos"],dos_manos:["dos_manos","mano_principal","mano_secundaria","escudo"],puesto:[]};
+const eqCopia=x=>JSON.parse(JSON.stringify(x));
+function eqSumar(lista,obj){const y=lista.find(z=>z.objeto===obj.objeto);if(y){y.cantidad=Math.round((y.cantidad+obj.cantidad)*100)/100;y.mov=true}else lista.push(Object.assign({},obj,{mov:true}))}
+function eqQuitar(lista,nombre,n){const y=lista.find(z=>z.objeto===nombre);if(!y)return null;const sale=Object.assign({},y,{cantidad:n});
+  y.cantidad=Math.round((y.cantidad-n)*100)/100;if(y.cantidad<=0)lista.splice(lista.indexOf(y),1);return sale}
+// Vista previa: repite en el navegador lo que hará equipo.py (los lugares que chocan vuelven a portado). CA y ataques se recalculan al confirmar.
+function eqAplicar(v,c){const p=v.personas[c.persona];if(!p)return;
+  if(c.tipo==="equipar"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})});
+    const o=eqQuitar(p.portado,c.objeto,1);if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb/(o.cantidad||1),lugares:o.lugares,mov:true})}
+  if(c.tipo==="guardar"){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})}}
+  if(c.tipo==="dar"){const q=v.personas[c.a];if(!q)return;let o=eqQuitar(p.portado,c.objeto,c.cantidad);
+    if(!o){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);o={objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]}}}
+    if(o)eqSumar(q.portado,o)}}
+function eqTexto(c,L){return c.tipo==="equipar"?`${c.persona} equipa ${c.objeto} (${L[c.lugar]})`:c.tipo==="guardar"?`${c.persona} guarda ${c.objeto}`:`${c.persona} le da ${c.cantidad>1?c.cantidad+" de ":""}${c.objeto} a ${c.a}`}
+function pintarEquipo(eq){
+  if(eq)equipoPub=eq;eq=equipoPub;$("panelEquipo").hidden=!eq;if(!eq)return;
+  const L=eq.lugares,bloqueado=!!eq.en_combate,v=eqCopia(eq);
+  // Los objetos de lo portado traen sus lugares posibles; los equipados los heredan de su objeto.
+  Object.values(v.personas).forEach(p=>p.equipado.forEach(x=>{x.lugares=x.lugares||(x.clase==="armadura"?["armadura"]:x.clase==="escudo"?["escudo"]:[])}));
+  equipoCambios.forEach(c=>eqAplicar(v,c));equipoVista=v;
+  $("equipoAviso").textContent=bloqueado?"Hay un combate en curso: el equipo se ve pero no se cambia (ponerse o quitarse armadura lleva minutos; desenvainar va dentro del turno).":"Toca un objeto para equiparlo, guardarlo o dárselo a otro. Nada cambia hasta que confirmes.";
+  const n=x=>String(Math.round(x*100)/100).replace(".",",");
+  const abiertos=new Set([...document.querySelectorAll(".eq-persona[open]")].map(d=>d.dataset.p));
+  $("equipoLista").innerHTML=Object.entries(v.personas).map(([q,p])=>`<details class="eq-persona" data-p="${esc(q)}" ${abiertos.has(q)?"open":""}><summary><b>${esc(q)}</b><span class="estado">CA ${p.ca.valor}${p.ca.notas.length?" · "+esc(p.ca.notas.join("; ")):""}</span></summary>
+    <div class="eq-grupo">Equipado</div>${p.equipado.map(x=>`<button class="eq-obj ${x.mov?"mov":""}" data-eq="e" data-p="${esc(q)}" data-o="${esc(x.objeto)}" ${bloqueado?"disabled":""}><span>${esc(x.objeto)}</span><span class="eq-lugar">${esc(L[x.lugar])}</span></button>`).join("")||`<div class="estado">Nada</div>`}
+    <ul class="eq-ataques">${p.ataques.map(a=>`<li>${esc(a.nombre)} ${sg(a.bono)}, ${esc(a.dano)}${a.notas&&a.notas.length?` — ${esc(a.notas.join("; "))}`:""}</li>`).join("")}</ul>
+    <div class="estado" style="margin-left:16px">${esc(p.ca.detalle)}</div>
+    <div class="eq-grupo">Porta</div>${p.portado.map(x=>`<button class="eq-obj ${x.mov?"mov":""}" data-eq="p" data-p="${esc(q)}" data-o="${esc(x.objeto)}" ${bloqueado?"disabled":""}><span>${esc(x.objeto)}${x.cantidad!==1?` ×${n(x.cantidad)}`:""}</span><span class="estado">${n(x.lb)} lb</span></button>`).join("")||`<div class="estado">Nada</div>`}</details>`).join("");
+  $("equipoPendientes").hidden=!equipoCambios.length;
+  $("equipoCambios").innerHTML=equipoCambios.map((c,i)=>`<li>${esc(eqTexto(c,L))}<button class="sec" data-quitar="${i}" aria-label="Quitar este cambio">×</button></li>`).join("");
+  $("equipoCambios").querySelectorAll("[data-quitar]").forEach(b=>b.onclick=()=>{equipoCambios.splice(Number(b.dataset.quitar),1);pintarEquipo()});
+  $("equipoLista").querySelectorAll(".eq-obj:not(:disabled)").forEach(b=>b.onclick=()=>eqMenu(b.dataset.p,b.dataset.o,b.dataset.eq==="e"))}
+function eqMenu(q,objeto,equipado){
+  const v=equipoVista,L=equipoPub.lugares,p=v.personas[q],x=(equipado?p.equipado:p.portado).find(z=>z.objeto===objeto);if(!x)return;
+  const otros=Object.keys(v.personas).filter(z=>z!==q),ops=[];
+  if(equipado)ops.push({t:"Guardar (pasa a lo que porta)",v:{tipo:"guardar",persona:q,objeto}});
+  else(x.lugares||[]).forEach(l=>ops.push({t:`Equipar: ${L[l]}`,v:{tipo:"equipar",persona:q,objeto,lugar:l}}));
+  otros.forEach(o=>ops.push({t:`Dárselo a ${o}`+(!equipado&&x.cantidad>1?" (uno)":""),v:{tipo:"dar",persona:q,a:o,objeto,cantidad:1}}));
+  if(!equipado&&x.cantidad>1&&Number.isInteger(x.cantidad))otros.forEach(o=>ops.push({t:`Dárselos todos a ${o} (${x.cantidad})`,v:{tipo:"dar",persona:q,a:o,objeto,cantidad:x.cantidad}}));
+  abrirHoja(objeto,ops,c=>{equipoCambios.push(c);$("equipoEstado").textContent="";pintarEquipo()})}
+$("equipoDescartar").addEventListener("click",()=>{equipoCambios=[];$("equipoEstado").textContent="";pintarEquipo()});
+$("equipoConfirmar").addEventListener("click",async()=>{
+  if(!equipoCambios.length)return;const b=$("equipoConfirmar");b.disabled=true;
+  try{await enviarExploracion({tipo:"equipo",cambios:equipoCambios,ts:Date.now()});
+    equipoCambios=[];$("equipoEstado").textContent="Enviado: se aplica y la lista se actualiza sola en unos segundos.";pintarEquipo()}
+  catch(e){$("equipoEstado").textContent=`No se pudo enviar (${e.message}).`}
+  finally{b.disabled=false}});
+
 // Carga: cuánto lleva cada uno contra su capacidad (FUE × 15 lb) y qué; lo guardado en otros lados, aparte.
 function pintarCarga(c){
   $("cargaPiso").hidden=!c;if(!c)return;
