@@ -695,38 +695,51 @@ function eqQuitar(lista,nombre,n){const y=lista.find(z=>z.objeto===nombre);if(!y
   y.cantidad=Math.round((y.cantidad-n)*100)/100;y.lb=u*y.cantidad;y.mov=true;if(y.cantidad<=0)lista.splice(lista.indexOf(y),1);return sale}
 // Vista previa: repite en el navegador lo que hará equipo.py (los lugares que chocan vuelven a portado). CA y ataques se recalculan al confirmar.
 function eqAplicar(v,c){const p=v.personas[c.persona];if(!p)return;
-  if(c.tipo==="equipar"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})});
-    const o=eqQuitar(p.portado,c.objeto,1);if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb,lugares:o.lugares,mov:true})}
-  if(c.tipo==="guardar"){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);eqSumar(p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]})}}
+  // Lo que vuelve de las manos va a lo suyo o, si es de la cuadrilla, al montón común.
+  const devolver=x=>eqSumar(x.comun?v.comun:p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[],comun:x.comun});
+  if(c.tipo==="equipar"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);devolver(x)});
+    const comun=!p.portado.find(z=>z.objeto===c.objeto),o=eqQuitar(comun?v.comun:p.portado,c.objeto,1);
+    if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb,lugares:o.lugares,comun,mov:true})}
+  if(c.tipo==="guardar"){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);devolver(x)}}
   if(c.tipo==="dar"){const q=v.personas[c.a];if(!q)return;let o=eqQuitar(p.portado,c.objeto,c.cantidad);
-    if(!o){const x=p.equipado.find(z=>z.objeto===c.objeto);if(x){p.equipado.splice(p.equipado.indexOf(x),1);o={objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]}}}
+    if(!o){const x=p.equipado.find(z=>z.objeto===c.objeto&&!z.comun);if(x){p.equipado.splice(p.equipado.indexOf(x),1);o={objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]}}}
     if(o)eqSumar(q.portado,o)}}
 function eqTexto(c,L){return c.tipo==="equipar"?`${c.persona} equipa ${c.objeto} (${L[c.lugar]})`:c.tipo==="guardar"?`${c.persona} guarda ${c.objeto}`:`${c.persona} le da ${c.cantidad>1?c.cantidad+" de ":""}${c.objeto} a ${c.a}`}
 function pintarEquipo(eq){
   if(eq)equipoPub=eq;eq=equipoPub;$("panelEquipo").hidden=!eq;if(!eq)return;
-  const L=eq.lugares,bloqueado=!!eq.en_combate,v=eqCopia(eq);
-  // Los objetos de lo portado traen sus lugares posibles; los equipados los heredan de su objeto.
+  const L=eq.lugares,bloqueado=!!eq.en_combate,v=eqCopia(eq);v.comun=v.comun||[];
   Object.values(v.personas).forEach(p=>p.equipado.forEach(x=>{x.lugares=x.lugares||(x.clase==="armadura"?["armadura"]:x.clase==="escudo"?["escudo"]:[])}));
   equipoCambios.forEach(c=>eqAplicar(v,c));equipoVista=v;
-  $("equipoAviso").textContent=bloqueado?"Hay un combate en curso: el equipo se ve pero no se cambia (ponerse o quitarse armadura lleva minutos; desenvainar va dentro del turno).":"Toca un objeto para equiparlo, guardarlo o dárselo a otro. Nada cambia hasta que confirmes.";
+  $("equipoAviso").textContent=bloqueado?"Hay un combate en curso: el equipo se ve pero no se cambia (ponerse o quitarse armadura lleva minutos; desenvainar va dentro del turno).":"Toca un objeto para equiparlo, guardarlo o dárselo a otro. Lo de la cuadrilla no es de nadie: su peso se reparte solo entre todos. Nada cambia hasta que confirmes.";
   const n=x=>String(Math.round(x*100)/100).replace(".",",");
   const abiertos=new Set([...document.querySelectorAll(".eq-persona[open]")].map(d=>d.dataset.p));
-  $("equipoLista").innerHTML=Object.entries(v.personas).map(([q,p])=>`<details class="eq-persona" data-p="${esc(q)}" ${abiertos.has(q)?"open":""}><summary><b>${esc(q)}</b><span class="estado">CA ${p.ca.valor}${p.ca.notas.length?" · "+esc(p.ca.notas.join("; ")):""}</span></summary>
-    <div class="eq-grupo">Equipado</div>${p.equipado.map(x=>`<button class="eq-obj ${x.mov?"mov":""}" data-eq="e" data-p="${esc(q)}" data-o="${esc(x.objeto)}" ${bloqueado?"disabled":""}><span>${esc(x.objeto)}</span><span class="eq-lugar">${esc(L[x.lugar])}</span></button>`).join("")||`<div class="estado">Nada</div>`}
+  const boton=(x,q,tipo,extra)=>`<button class="eq-obj ${x.mov?"mov":""}" data-eq="${tipo}" data-p="${esc(q)}" data-o="${esc(x.objeto)}" ${bloqueado?"disabled":""}><span>${esc(x.objeto)}${x.cantidad&&x.cantidad!==1?` ×${n(x.cantidad)}`:""}</span>${extra}</button>`;
+  let h=Object.entries(v.personas).map(([q,p])=>{const deC=(p.de_la_cuadrilla||[]).reduce((a,x)=>a+x.lb,0);
+    return `<details class="eq-persona" data-p="${esc(q)}" ${abiertos.has(q)?"open":""}><summary><b>${esc(q)}</b><span class="estado">CA ${p.ca.valor}${p.ca.notas.length?" · "+esc(p.ca.notas.join("; ")):""} · carga ${n(p.carga_lb)} / ${p.capacidad_lb} lb</span></summary>
+    <div class="eq-grupo">Equipado</div>${p.equipado.map(x=>boton(x,q,"e",`<span class="eq-lugar">${esc(L[x.lugar])}${x.comun?" · de la cuadrilla":""}</span>`)).join("")||`<div class="estado">Nada</div>`}
     <ul class="eq-ataques">${p.ataques.map(a=>`<li>${esc(a.nombre)} ${sg(a.bono)}, ${esc(a.dano)}${a.notas&&a.notas.length?` — ${esc(a.notas.join("; "))}`:""}</li>`).join("")}</ul>
     <div class="estado" style="margin-left:16px">${esc(p.ca.detalle)}</div>
-    <div class="eq-grupo">Porta</div>${p.portado.map(x=>`<button class="eq-obj ${x.mov?"mov":""}" data-eq="p" data-p="${esc(q)}" data-o="${esc(x.objeto)}" ${bloqueado?"disabled":""}><span>${esc(x.objeto)}${x.cantidad!==1?` ×${n(x.cantidad)}`:""}</span><span class="estado">${n(x.lb)} lb</span></button>`).join("")||`<div class="estado">Nada</div>`}</details>`).join("");
+    <div class="eq-grupo">Porta (suyo)</div>${p.portado.map(x=>boton(x,q,"p",`<span class="estado">${n(x.lb)} lb</span>`)).join("")||`<div class="estado">Nada</div>`}
+    <div class="estado">De lo de la cuadrilla carga ${n(deC)} lb: ${esc((p.de_la_cuadrilla||[]).map(x=>x.objeto+(x.cantidad!==1?` ×${n(x.cantidad)}`:"")).join("; ")||"nada")}.</div></details>`}).join("");
+  h+=`<details class="eq-persona" data-p="__comun" ${abiertos.has("__comun")?"open":""}><summary><b>De la cuadrilla</b><span class="estado">${n(v.comun.reduce((a,x)=>a+x.lb,0))} lb, repartidas entre todos</span></summary>
+    ${v.comun.map(x=>boton(x,"__comun","c",`<span class="estado">${n(x.lb)} lb</span>`)).join("")||`<div class="estado">Nada</div>`}</details>`;
+  $("equipoLista").innerHTML=h;
   $("equipoPendientes").hidden=!equipoCambios.length;
   $("equipoCambios").innerHTML=equipoCambios.map((c,i)=>`<li>${esc(eqTexto(c,L))}<button class="sec" data-quitar="${i}" aria-label="Quitar este cambio">×</button></li>`).join("");
   $("equipoCambios").querySelectorAll("[data-quitar]").forEach(b=>b.onclick=()=>{equipoCambios.splice(Number(b.dataset.quitar),1);pintarEquipo()});
-  $("equipoLista").querySelectorAll(".eq-obj:not(:disabled)").forEach(b=>b.onclick=()=>eqMenu(b.dataset.p,b.dataset.o,b.dataset.eq==="e"))}
-function eqMenu(q,objeto,equipado){
-  const v=equipoVista,L=equipoPub.lugares,p=v.personas[q],x=(equipado?p.equipado:p.portado).find(z=>z.objeto===objeto);if(!x)return;
-  const otros=Object.keys(v.personas).filter(z=>z!==q),ops=[];
-  if(equipado)ops.push({t:"Guardar (pasa a lo que porta)",v:{tipo:"guardar",persona:q,objeto}});
+  $("equipoLista").querySelectorAll(".eq-obj:not(:disabled)").forEach(b=>b.onclick=()=>eqMenu(b.dataset.p,b.dataset.o,b.dataset.eq))}
+function eqMenu(q,objeto,tipo){
+  const v=equipoVista,L=equipoPub.lugares,nombres=Object.keys(v.personas);
+  if(tipo==="c"){const x=v.comun.find(z=>z.objeto===objeto);if(!x)return;
+    // De la cuadrilla: primero quién lo usa, después dónde.
+    abrirHoja(`${objeto}: ¿quién lo equipa?`,nombres.map(z=>({t:z,v:z})),quien=>
+      abrirHoja(`${quien} equipa ${objeto}`,(x.lugares||[]).map(l=>({t:L[l],v:l})),l=>{equipoCambios.push({tipo:"equipar",persona:quien,objeto,lugar:l});$("equipoEstado").textContent="";pintarEquipo()}));return}
+  const p=v.personas[q],equipado=tipo==="e",x=(equipado?p.equipado:p.portado).find(z=>z.objeto===objeto);if(!x)return;
+  const otros=nombres.filter(z=>z!==q),ops=[];
+  if(equipado)ops.push({t:x.comun?"Guardar (vuelve a lo de la cuadrilla)":"Guardar (pasa a lo que porta)",v:{tipo:"guardar",persona:q,objeto}});
   else(x.lugares||[]).forEach(l=>ops.push({t:`Equipar: ${L[l]}`,v:{tipo:"equipar",persona:q,objeto,lugar:l}}));
-  otros.forEach(o=>ops.push({t:`Dárselo a ${o}`+(!equipado&&x.cantidad>1?" (uno)":""),v:{tipo:"dar",persona:q,a:o,objeto,cantidad:1}}));
-  if(!equipado&&x.cantidad>1&&Number.isInteger(x.cantidad))otros.forEach(o=>ops.push({t:`Dárselos todos a ${o} (${x.cantidad})`,v:{tipo:"dar",persona:q,a:o,objeto,cantidad:x.cantidad}}));
+  if(!x.comun){otros.forEach(o=>ops.push({t:`Dárselo a ${o}`+(!equipado&&x.cantidad>1?" (uno)":""),v:{tipo:"dar",persona:q,a:o,objeto,cantidad:1}}));
+    if(!equipado&&x.cantidad>1&&Number.isInteger(x.cantidad))otros.forEach(o=>ops.push({t:`Dárselos todos a ${o} (${x.cantidad})`,v:{tipo:"dar",persona:q,a:o,objeto,cantidad:x.cantidad}}))}
   abrirHoja(objeto,ops,c=>{equipoCambios.push(c);$("equipoEstado").textContent="";pintarEquipo()})}
 $("equipoDescartar").addEventListener("click",()=>{equipoCambios=[];$("equipoEstado").textContent="";pintarEquipo()});
 $("equipoConfirmar").addEventListener("click",async()=>{
