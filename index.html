@@ -407,6 +407,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       </div>
       <div class="estado" id="resDano"></div>
       <div class="estado" id="estadoDano"></div>
+      <div id="cfgSiguienteImpacto" hidden></div>
       <button class="sec" id="cerrarDano" hidden>Listo</button>
     </section>
   </div>
@@ -1314,7 +1315,7 @@ function pintarCombate(cb){
   const ac=[`<option value="">Elegir…</option>`,...s.acciones.map(a=>`<option value="atq:${a.id}">Atacar: ${esc(a.nombre)}</option>`),...s.opciones.filter(o=>o.tiempo==="accion").map(o=>`<option value="op:${o.id}">${esc(o.nombre)}</option>`),...s.comunes.map(x=>`<option value="com:${esc(x)}">${esc(x)}</option>`),`<option value="otra">Otra (escribirla)</option>`];
   $("selAccion").innerHTML=ac.join(""); $("selAccion").value=form.accion;
   const soloAtaque=!!(eco.accion&&tuyo2&&eco.ataques_restantes>0);
-  if(soloAtaque){$("selAccion").innerHTML=ac.filter(o=>o.includes('value="atq:')||o.includes('value=""')).join("");$("selAccion").value=form.accion}
+  if(soloAtaque){const permitidas=new Set(s.acciones.filter(a=>a.clase==="arma").map(a=>`atq:${a.id}`));$("selAccion").innerHTML=ac.filter(o=>o.includes('value=""')||[...permitidas].some(v=>o.includes(`value="${v}"`))).join("");$("selAccion").value=form.accion;if(!permitidas.has(form.accion)){form.accion="";$("selAccion").value=""}}
   $("selAccion").disabled=!!(eco.accion&&tuyo2)&&!soloAtaque; if($("selAccion").disabled){form.accion="";$("selAccion").value=""}
   $("cfgAdicional").innerHTML=campos("ad",form.adicional); $("cfgAccion").innerHTML=campos("ac",form.accion);
   $("lblLevantar").hidden=!(s.condiciones||[]).includes("derribado");
@@ -1342,6 +1343,21 @@ const maxObjetivos=(o,p)=>(o.max_base||1)+(o.por_nivel_objetivos||0)*(nivelDe(fo
 // «1d8+4» con «1d8» por nivel extra → «3d8+4» a dos niveles más (igual que tools/reglas.py).
 function escalarDados(base,porNivel,extra){const m=/^(\d+)d(\d+)([+-]\d+)?$/.exec(base),q=/^(\d+)d(\d+)$/.exec(porNivel||"");
   return m&&q&&extra>0?`${Number(m[1])+extra*Number(q[1])}d${m[2]}${m[3]||""}`:base}
+const prefijoImpacto=(p,i)=>i?`${p}_impacto${i}`:p;
+function cantidadImpactos(a,p="ac"){
+  const r=a.repeticion||{}, nivel=a.nivel_conjuro||0, espacio=nivel?nivelDe(form.c[`${p}_espacio`]||espacios(nivel)[0]?.v):0;
+  return Number(a.cantidad_impactos||a.haces||r.base||1)+Number(r.por_nivel_espacio||0)*Math.max(0,espacio-nivel);
+}
+function objetivosImpactos(p,a){
+  const n=cantidadImpactos(a,p), modo=(a.repeticion||{}).objetivos||"libres";
+  return Array.from({length:n},(_,i)=>form.c[`${prefijoImpacto(p,modo==="mismo"?0:i)}_objetivo`]);
+}
+function ataqueElegido(id,obj,ajustes={},previa=null){
+  const s=combate.shalock,a=ataque(id),blanco=String(obj).startsWith("@")?{lo_ves:false}:combate.combatientes.find(x=>x.id===obj)||{};
+  const ven=!!ajustes.ventaja||blanco.te_ve===false||!!s.ventaja_proxima||(s.ventaja_contra||[]).includes(obj);
+  const des=!!ajustes.desventaja||((a.etiquetas||[]).some(t=>t.endsWith("_distancia"))&&enemigoJunto())||blanco.lo_ves===false;
+  return tirarAtaque(id,obj,ven&&!des?"ventaja":des&&!ven?"desventaja":null,impactosPara(obj,previa));
+}
 function campos(p,valor){
   if(!valor)return "";
   const s=combate.shalock, h=[];
@@ -1365,12 +1381,16 @@ function campos(p,valor){
   }
   if(valor.startsWith("com:"))return "";
   if(valor.startsWith("atq:")){
-    const a=ataque(valor.slice(4));
-    const blancos=[...enemigos().map(n=>({v:n,t:n+(((combate.combatientes.find(x=>x.id===n)||{}).percibido==="oyes")?" (no lo ves)":"")})),{v:"@",t:"Un hexágono, a ciegas"}];
-    if(String(form.c[`${p}_objetivo`]||"").startsWith("@")&&form.c[`${p}_objetivo`]!=="@")blancos.push({v:form.c[`${p}_objetivo`],t:`El hexágono ${form.c[`${p}_objetivo`].slice(1)}`});
-    h.push(selector(`${p}_objetivo`,blancos,"Blanco"));
-    if(String(form.c[`${p}_objetivo`]||"").startsWith("@"))h.push(`<button type="button" class="sec" data-apuntar="${p}_hex">${form.c[`${p}_objetivo`].length>1?"Cambiar el hexágono":"Elegir el hexágono en el mapa"}</button>`);
-    h.push(`<div class="opciones"><label><input type="checkbox" data-k="${p}_ventaja"> Ventaja</label><label><input type="checkbox" data-k="${p}_desventaja"> Desventaja</label></div>`);
+    const a=ataque(valor.slice(4)),n=cantidadImpactos(a,p),modo=(a.repeticion||{}).objetivos||"libres";
+    if(a.nivel_conjuro)h.push(selector(`${p}_espacio`,espacios(a.nivel_conjuro),"Espacio de conjuro"));
+    if(n>1)h.push(`<div class="estado">${n} impactos independientes. ${modo==="mismo"?"Todos contra el mismo objetivo.":modo==="distintos"?"Un objetivo distinto por impacto.":"Puedes repartirlos entre el mismo objetivo o varios."}</div>`);
+    for(let i=0;i<n;i++){
+      const q=prefijoImpacto(p,i),blancos=[...enemigos().map(v=>({v,t:v+(((combate.combatientes.find(x=>x.id===v)||{}).percibido==="oyes")?" (no lo ves)":"")})),{v:"@",t:"Un hexágono, a ciegas"}];
+      const obj=form.c[`${q}_objetivo`];if(String(obj||"").startsWith("@")&&obj!=="@")blancos.push({v:obj,t:`El hexágono ${obj.slice(1)}`});
+      if(!i||modo!=="mismo")h.push(selector(`${q}_objetivo`,blancos,n>1?`Objetivo del impacto ${i+1}`:"Blanco"));
+      if(String(obj||"").startsWith("@"))h.push(`<button type="button" class="sec" data-apuntar="${q}_hex">${obj.length>1?"Cambiar el hexágono":"Elegir el hexágono en el mapa"}</button>`);
+      h.push(`<div class="opciones"><label><input type="checkbox" data-k="${q}_ventaja"> Ventaja${n>1?` (${i+1})`:""}</label><label><input type="checkbox" data-k="${q}_desventaja"> Desventaja${n>1?` (${i+1})`:""}</label></div>`);
+    }
     const opI=opcionalImpacto(a);if(opI)h.push(`<div class="estado">${esc(opI.nombre)} se decide después, si impactas.</div>`);
     return h.join("");
   }
@@ -1544,7 +1564,12 @@ function revisar(){
   const elegida=x=>x.tipo==="accion"?form.accion:x.tipo==="adicional"?form.adicional:"x";
   pasos.forEach(x=>{if(!elegida(x))bloqueos.push(`${x.tipo==="accion"?"Acción":"Acción adicional"}: elige cuál.`)});
   if(form.accion.startsWith("atq:")){
-    const a=ataque(form.accion.slice(4)), obj=form.c.ac_objetivo, dd=distanciaAlAtacar(obj);
+    const a=ataque(form.accion.slice(4)), objetivos=objetivosImpactos("ac",a),modo=(a.repeticion||{}).objetivos||"libres";
+    if(a.nivel_conjuro&&!espacios(a.nivel_conjuro).some(e=>e.v===form.c.ac_espacio))bloqueos.push("Elige un espacio de conjuro disponible.");
+    if(modo==="distintos"&&new Set(objetivos).size!==objetivos.length)bloqueos.push("Esta acción necesita un objetivo distinto por impacto.");
+    objetivos.forEach((obj,i)=>{
+    if(!obj){bloqueos.push(`Impacto ${i+1}: elige su objetivo.`);return}
+    const dd=distanciaAlAtacar(obj);
     const nObj=String(obj).startsWith("@")?(obj.length>1?`el hexágono ${obj.slice(1)}`:"el hexágono"):obj;
     if(dd==null&&obj!=="@")avisos.push(`No sé a qué distancia está ${nObj}: el DM la fija.`);
     else if(a.clase==="arma"&&dd>(a.alcance||5))bloqueos.push(`${nObj[0].toUpperCase()+nObj.slice(1)} está a ${dd} pies: para golpear cuerpo a cuerpo muévete antes al menos ${dd-(a.alcance||5)} pies hacia él.`);
@@ -1558,14 +1583,16 @@ function revisar(){
     if(combate.mapa){const c=String(obj).startsWith("@")?{id:"ese hexágono",pos:posBlanco(obj)}:combate.combatientes.find(x=>x.id===obj),o=origenAtaque();
       if(c&&c.pos&&o){const cob=coberturaHex(combate.mapa.filas,o,c.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==c.id).map(x=>x.pos));
         if(cob===null)bloqueos.push(`No hay línea hasta ${nObj}: hay un muro en medio.`);else if(cob)avisos.push(`${nObj[0].toUpperCase()+nObj.slice(1)} tiene cobertura (+${cob} a su CA).`)}}
+    });
   }
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(o&&o.area&&dondeDe(p)==="punto"&&!form.c[`${p}_punto`])bloqueos.push(`${o.nombre}: elige el punto en el mapa.`)});
   // «Una criatura que puedas ver»: el motor dice a quién ves (línea de visión y oscuridad).
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(!o||!o.requiere_ver)return;const objs=(o.objetivo==="aliados"||o.objetivo==="enemigos")?(o.objetivo==="aliados"?aliados():enemigos()).filter(x=>form.c[`${p}_obj_${x}`]):[form.c[`${p}_objetivo`]];
     objs.filter(Boolean).forEach(n=>{const cc=combate.combatientes.find(x=>x.id===n);if(cc&&cc.lo_ves===false)bloqueos.push(`${o.nombre}: no ves a ${n}, y tiene que ser una criatura que puedas ver.`)})});
   if(!pasos.length&&!mov.mv.length&&!s.turno_abierto)bloqueos.push("Agrega al menos un paso con «+».");
+  if(enCurso||combate.shalock.serie_impactos&&!combate.shalock.serie_impactos.terminada)bloqueos.push("Resuelve los impactos en curso antes de enviar otra acción.");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
-  $("enviarTurno").disabled=bloqueos.length>0||!!envioTurno&&false;
+  $("enviarTurno").disabled=bloqueos.length>0;
   $("enviarParcial").disabled=bloqueos.length>0||!pasos.length;
   return bloqueos.length===0;
 }
@@ -1588,7 +1615,12 @@ function describir(p,valor){
   if(valor==="com:Ayudar"){const modo=form.c[`${p}_modo`]||"ataque";
     return{tipo:"comun",nombre:"Ayudar",aliado:form.c[`${p}_aliado`],contra:modo==="ataque"?form.c[`${p}_contra`]:null,tarea:modo==="prueba"?(form.c[`${p}_tarea`]||""):null}}
   if(valor.startsWith("com:"))return{tipo:"comun",nombre:valor.slice(4)};
-  if(valor.startsWith("atq:"))return{tipo:"ataque",id:valor.slice(4)};
+  if(valor.startsWith("atq:")){
+    const a=ataque(valor.slice(4)),objetivos=objetivosImpactos(p,a),x={tipo:"ataque",id:a.id,objetivos_impactos:objetivos,indice_impacto:0,
+      ajustes_impactos:objetivos.map((_,i)=>({ventaja:!!form.c[`${prefijoImpacto(p,i)}_ventaja`],desventaja:!!form.c[`${prefijoImpacto(p,i)}_desventaja`]}))};
+    if(a.nivel_conjuro){x.espacio=form.c[`${p}_espacio`];x.nivel=nivelDe(x.espacio)}
+    return x;
+  }
   const o=opcion(valor.slice(3)), x={tipo:"opcion",id:o.id,nombre:o.nombre};
   if(o.objetivo==="enemigo"||o.objetivo==="aliado")x.objetivo=form.c[`${p}_objetivo`];
   if(o.objetivo==="aliados"||o.objetivo==="enemigos")x.objetivos=(o.objetivo==="aliados"?aliados():enemigos()).filter(a=>form.c[`${p}_obj_${a}`]);
@@ -1611,10 +1643,7 @@ function tirarTurno(){
   const oa=ad&&ad.tipo==="opcion"?opcion(ad.id):null;
   const previa=oa&&oa.al_impactar_si_lanza&&form.orden==="antes"?{datos:oa.al_impactar_si_lanza,objetivo:ad.objetivo,nivel:ad.nivel||1}:null;
   if(ac&&ac.tipo==="ataque"){
-    const blanco=String(form.c.ac_objetivo).startsWith("@")?{lo_ves:false}:combate.combatientes.find(x=>x.id===form.c.ac_objetivo)||{};
-    // PHB: atacar a quien no ves, desventaja; a quien no te ve, ventaja (lo calcula el motor con la oscuridad y la línea de visión).
-    const a=ataque(ac.id), ven=!!form.c.ac_ventaja||blanco.te_ve===false||!!s.ventaja_proxima||(s.ventaja_contra||[]).includes(form.c.ac_objetivo), des=!!form.c.ac_desventaja||(a.clase!=="arma"&&enemigoJunto())||blanco.lo_ves===false;
-    Object.assign(ac,tirarAtaque(ac.id,form.c.ac_objetivo,ven&&!des?"ventaja":des&&!ven?"desventaja":null,impactosPara(form.c.ac_objetivo,previa)));
+    Object.assign(ac,ataqueElegido(ac.id,ac.objetivos_impactos[0],ac.ajustes_impactos[0],previa));
   }
   // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
   if(ac&&ac.habilidad){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
@@ -1653,6 +1682,8 @@ function pintarDano(){
   const p=$("panelDano"); if(!combate||!enCurso){p.hidden=true;return}
   const v=combate.resolucion&&combate.resolucion.tirada===enCurso.tirada?combate.resolucion:null;
   p.hidden=false;
+  $("cerrarDano").hidden=true;
+  pintarSiguienteImpacto();
   const nombreBlanco=String(enCurso.objetivo).startsWith("@")?`el hexágono ${enCurso.objetivo.slice(1)}`:enCurso.objetivo;
   // Ya enviado: el resultado queda a la vista hasta que el jugador apriete «Listo» (antes se borraba al instante).
   if(enCurso.enviado){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: daño enviado al DM.`;$("opcDano").hidden=true;
@@ -1671,7 +1702,63 @@ function pintarDano(){
 const opcionalImpacto=a=>a&&a.clase==="arma"?((combate.shalock.al_impactar||{}).opcionales||[]).find(o=>o.coste==="espacio"):null;
 function dadosOpcional(op,nivel){const m=/^(\d+)d(\d+)$/.exec(op.dados),q=/^(\d+)d/.exec(op.por_nivel||"0d");
   const n=Math.min(op.max_dados||99,Number(m[1])+Number(q[1])*(nivel-1));return`${n}d${m[2]}`}
-$("cerrarDano").onclick=()=>{enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano()};
+async function subirTirada(id,t,mensaje){
+  const url=`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`;
+  const r=await fetch(url,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:mensaje,content:b64(JSON.stringify(t))})});
+  if(r.ok)return;
+  // La respuesta pudo perderse después de que GitHub guardara el archivo. No volver a tirar ni duplicar.
+  if(r.status===409||r.status===422){
+    const previo=await fetch(url,{headers:cabeceras(),cache:"no-store"});
+    if(previo.ok){const j=await previo.json();if(JSON.stringify(JSON.parse(deB64(j.content)))===JSON.stringify(t))return}
+  }
+  throw new Error("HTTP "+r.status);
+}
+function pintarSiguienteImpacto(){
+  const cfg=$("cfgSiguienteImpacto"),b=$("cerrarDano"),s=combate.shalock.serie_impactos;
+  cfg.hidden=true;b.textContent="Listo";b.disabled=false;
+  if(!s||!enCurso.objetivos_impactos||enCurso.objetivos_impactos.length<2)return;
+  if(s.serie!==enCurso.tirada&&s.serie!==enCurso.serie)return;
+  enCurso.serie=s.serie;guardarEnCurso();
+  if(s.terminada)return;
+  b.textContent=`Continuar con el impacto ${s.completados.length+1}/${s.cantidad}`;
+  b.disabled=s.espera!=="siguiente"||s.completados.length<=(enCurso.indice_impacto||0);
+  if(b.disabled)return;
+  const i=s.completados.length,modo=s.modo,prev=enCurso.objetivos_impactos[i],lista=modo==="mismo"?[s.objetivos[0]]:[...new Set([...enemigos(),...enCurso.objetivos_impactos.filter(x=>String(x).startsWith("@")&&x.length>1)])].filter(x=>modo!=="distintos"||!s.objetivos.slice(0,i).includes(x));
+  cfg.hidden=false;cfg.innerHTML=`<label>Objetivo del impacto ${i+1}<select id="objetivoImpacto"><option value="">Elegir…</option>${lista.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}</select></label><button type="button" class="sec" id="renunciarImpactos">Renunciar a los impactos restantes</button>`;
+  $("objetivoImpacto").value=lista.includes(prev)?prev:"";
+  $("objetivoImpacto").onchange=ev=>{enCurso.objetivos_impactos[i]=ev.target.value;guardarEnCurso()};
+  $("renunciarImpactos").disabled=!!enCurso.siguiente;
+  $("renunciarImpactos").onclick=cancelarImpactos;
+}
+async function cancelarImpactos(){
+  const s=combate.shalock.serie_impactos;if(!s||s.espera!=="siguiente"||enCurso.siguiente)return;
+  if(!enCurso.cancelacion){const ts=Date.now();enCurso.cancelacion={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"impacto",serie:s.serie,indice_impacto:s.completados.length,cancelar:true,ts}};guardarEnCurso()}
+  try{await subirTirada(enCurso.cancelacion.id,enCurso.cancelacion.t,"fin de impactos de Shalock");enCurso=null;guardarEnCurso();pintarDano();revisar()}
+  catch(e){$("estadoDano").textContent=`No se pudo enviar (${e.message}). Reintenta: se conserva la misma decisión.`}
+}
+async function continuarImpacto(){
+  const s=combate.shalock.serie_impactos;
+  if(!s||s.terminada){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}
+  if(!enCurso.siguiente){
+    if(s.espera!=="siguiente")return;
+    const i=s.completados.length,obj=$("objetivoImpacto")?.value;
+    if(!obj){$("estadoDano").textContent="Elige el objetivo del siguiente impacto.";return}
+    const a=ataque(enCurso.id),bl=combate.combatientes.find(x=>x.id===obj),yo=combate.combatientes.find(x=>x.es_pj),dd=bl?.distancia;
+    if(bl&&!bl.activo){$("estadoDano").textContent="Ese objetivo ya no está disponible: elige otro o renuncia a los impactos restantes.";return}
+    if(dd!=null&&a.alcance&&dd>a.alcance){$("estadoDano").textContent="Ese objetivo está fuera del alcance; elige otro.";return}
+    if(a.requiere_ver&&bl?.lo_ves===false){$("estadoDano").textContent="Esta acción requiere ver al objetivo.";return}
+    if(combate.mapa&&yo?.pos&&bl?.pos&&coberturaHex(combate.mapa.filas,yo.pos,bl.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==obj).map(x=>x.pos))===null){$("estadoDano").textContent="No hay línea hasta ese objetivo.";return}
+    const atq=ataqueElegido(enCurso.id,obj,enCurso.ajustes_impactos?.[i]||{}),ts=Date.now();
+    enCurso.siguiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"impacto",serie:s.serie,indice_impacto:i,ataque:atq,ts}};guardarEnCurso();
+  }
+  const envio=enCurso.siguiente;$("cerrarDano").disabled=true;
+  try{
+    await subirTirada(envio.id,envio.t,"impacto de Shalock");
+    const anterior=enCurso;enCurso=Object.assign({},envio.t.ataque,{tirada:envio.id+".json",serie:envio.t.serie,indice_impacto:envio.t.indice_impacto,objetivos_impactos:anterior.objetivos_impactos,ajustes_impactos:anterior.ajustes_impactos});
+    guardarEnCurso();$("estadoDano").textContent="";$("resDano").textContent="";pintarDano();
+  }catch(e){$("estadoDano").textContent=`No se pudo enviar (${e.message}). Reintenta: se conserva la misma tirada.`;$("cerrarDano").disabled=false}
+}
+$("cerrarDano").onclick=continuarImpacto;
 $("tirarDano").addEventListener("click",async()=>{
   const v=combate.resolucion, a=ataque(enCurso.id), ef=enCurso.efectos||{}, crit=!!v.critico, obj=enCurso.objetivo;
   if(!enCurso.dano){
@@ -1686,15 +1773,14 @@ $("tirarDano").addEventListener("click",async()=>{
     // Castigo divino: 2d8 con espacio de nivel 1, +1d8 por nivel, máximo 5d8.
     if(castigo)danos.push(Object.assign(tirarExpr(dadosOpcional(op,nivelDe($("espCastigo").value)),crit,a.gwf),{tipo:`${op.tipo} (${op.nombre})`,fuente:op.id}));
     const ts=Date.now();
-    enCurso.dano={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"dano",ref:enCurso.tirada,accion:a.nombre,objetivo:obj,critico:crit,castigo,espacio_castigo:castigo?$("espCastigo").value:null,danos,ts}};
+    enCurso.dano={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"dano",ref:enCurso.tirada,serie:enCurso.serie||null,indice_impacto:enCurso.indice_impacto||0,accion:a.nombre,objetivo:obj,critico:crit,castigo,espacio_castigo:castigo?$("espCastigo").value:null,danos,ts}};
     guardarEnCurso();
   }
   const t=enCurso.dano.t, est=$("estadoDano");
   $("resDano").textContent=t.danos.map(x=>x.dados.length?`${x.expresion}: ${x.dados.join(" + ")}${/[+-]\d+$/.test(x.expresion)?" "+x.expresion.match(/[+-]\d+$/)[0].replace(/^([+-])/,"$1 "):""} = ${x.total} ${x.tipo}`:`${x.total} ${x.tipo}`).join("; ");
   est.className="estado";est.textContent="Enviando…";
   try{
-    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${enCurso.dano.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"daño de Shalock",content:b64(JSON.stringify(t))})});
-    if(!r.ok)throw new Error("HTTP "+r.status);
+    await subirTirada(enCurso.dano.id,t,"daño de Shalock");
     enCurso.enviado=true;enCurso.resumen=$("resDano").textContent;guardarEnCurso();est.className="estado ok";est.textContent="";$("castigoDano").checked=false;pintarDano();
   }catch(e){est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo daño.`}
 });
@@ -1770,8 +1856,7 @@ async function enviarTurno(parcial){
   $("resTurno").textContent=resumen(t);
   est.className="estado";est.textContent="Enviando…";$("enviarTurno").disabled=true;
   try{
-    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioTurno.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de Shalock",content:b64(JSON.stringify(t))})});
-    if(!r.ok)throw new Error("HTTP "+r.status);
+    await subirTirada(envioTurno.id,t,"turno de Shalock");
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
     envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false,adManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
     $("enviarTurno").textContent="Enviar y terminar turno";
