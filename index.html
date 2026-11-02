@@ -719,7 +719,11 @@ function eqQuitar(lista,nombre,n){const y=lista.find(z=>z.objeto===nombre);if(!y
 // Vista previa: repite en el navegador lo que hará equipo.py (los lugares que chocan vuelven a portado). CA y ataques se recalculan al confirmar.
 function eqAplicar(v,c){const p=v.personas[c.persona];if(!p)return;
   // Lo que vuelve de las manos va a lo suyo o, si es de la cuadrilla, al montón común.
-  const devolver=x=>eqSumar(x.comun?v.comun:p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[],comun:x.comun});
+  // El arma de pacto invocada no vuelve a ningún lado: desaparece (Pacto del Filo).
+  const devolver=x=>{if(String(x.objeto).startsWith("arma de pacto ("))return;eqSumar(x.comun?v.comun:p.portado,{objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[],comun:x.comun})};
+  if(c.tipo==="pacto"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)||String(x.objeto).startsWith("arma de pacto (")).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);devolver(x)});
+    const f=((v.pacto||{})[c.persona]||{formas:[]}).formas.find(z=>z.forma===c.forma)||{lugares:[]};
+    p.equipado.push({objeto:`arma de pacto (${c.forma})`,lugar:c.lugar,clase:"arma",lb:0,lugares:f.lugares,mov:true})}
   if(c.tipo==="equipar"){p.equipado.filter(x=>EQ_CHOCA[c.lugar].includes(x.lugar)).forEach(x=>{p.equipado.splice(p.equipado.indexOf(x),1);devolver(x)});
     const comun=!p.portado.find(z=>z.objeto===c.objeto),o=eqQuitar(comun?v.comun:p.portado,c.objeto,1);
     if(o)p.equipado.push({objeto:c.objeto,lugar:c.lugar,clase:o.clase,lb:o.lb,lugares:o.lugares,comun,mov:true})}
@@ -727,7 +731,7 @@ function eqAplicar(v,c){const p=v.personas[c.persona];if(!p)return;
   if(c.tipo==="dar"){const q=v.personas[c.a];if(!q)return;let o=eqQuitar(p.portado,c.objeto,c.cantidad);
     if(!o){const x=p.equipado.find(z=>z.objeto===c.objeto&&!z.comun);if(x){p.equipado.splice(p.equipado.indexOf(x),1);o={objeto:x.objeto,cantidad:1,lb:x.lb,clase:x.clase,lugares:x.lugares||[]}}}
     if(o)eqSumar(q.portado,o)}}
-function eqTexto(c,L){return c.tipo==="equipar"?`${c.persona} equipa ${c.objeto} (${L[c.lugar]})`:c.tipo==="guardar"?`${c.persona} guarda ${c.objeto}`:`${c.persona} le da ${c.cantidad>1?c.cantidad+" de ":""}${c.objeto} a ${c.a}`}
+function eqTexto(c,L){return c.tipo==="pacto"?`${c.persona} invoca su arma de pacto: ${c.forma} (${L[c.lugar]})`:c.tipo==="equipar"?`${c.persona} equipa ${c.objeto} (${L[c.lugar]})`:c.tipo==="guardar"?`${c.persona} guarda ${c.objeto}`:`${c.persona} le da ${c.cantidad>1?c.cantidad+" de ":""}${c.objeto} a ${c.a}`}
 function pintarEquipo(eq){
   if(eq)equipoPub=eq;eq=equipoPub;$("panelEquipo").hidden=!eq;if(!eq)return;
   const L=eq.lugares,bloqueado=!!eq.en_combate,v=eqCopia(eq);v.comun=v.comun||[];
@@ -740,6 +744,7 @@ function pintarEquipo(eq){
   let h=Object.entries(v.personas).map(([q,p])=>{const deC=(p.de_la_cuadrilla||[]).reduce((a,x)=>a+x.lb,0);
     return `<details class="eq-persona" data-p="${esc(q)}" ${abiertos.has(q)?"open":""}><summary><b>${esc(q)}</b><span class="estado">CA ${p.ca.valor}${p.ca.notas.length?" · "+esc(p.ca.notas.join("; ")):""} · carga ${n(p.carga_lb)} / ${p.capacidad_lb} lb</span></summary>
     <div class="eq-grupo">Equipado</div>${p.equipado.map(x=>boton(x,q,"e",`<span class="eq-lugar">${esc(L[x.lugar])}${x.comun?" · de la cuadrilla":""}</span>`)).join("")||`<div class="estado">Nada</div>`}
+    ${(eq.pacto||{})[q]?`<button class="sec" data-pacto="${esc(q)}" ${bloqueado?"disabled":""}>Invocar arma de pacto${eq.pacto[q].forma?` (última: ${esc(eq.pacto[q].forma)})`:""}</button>`:""}
     <ul class="eq-ataques">${p.ataques.map(a=>`<li>${esc(a.nombre)} ${sg(a.bono)}, ${esc(a.dano)}${a.notas&&a.notas.length?` — ${esc(a.notas.join("; "))}`:""}</li>`).join("")}</ul>
     <div class="estado" style="margin-left:16px">${esc(p.ca.detalle)}</div>
     <div class="eq-grupo">Porta (suyo)</div>${p.portado.map(x=>boton(x,q,"p",`<span class="estado">${n(x.lb)} lb</span>`)).join("")||`<div class="estado">Nada</div>`}
@@ -750,7 +755,13 @@ function pintarEquipo(eq){
   $("equipoPendientes").hidden=!equipoCambios.length;
   $("equipoCambios").innerHTML=equipoCambios.map((c,i)=>`<li>${esc(eqTexto(c,L))}<button class="sec" data-quitar="${i}" aria-label="Quitar este cambio">×</button></li>`).join("");
   $("equipoCambios").querySelectorAll("[data-quitar]").forEach(b=>b.onclick=()=>{equipoCambios.splice(Number(b.dataset.quitar),1);pintarEquipo()});
-  $("equipoLista").querySelectorAll(".eq-obj:not(:disabled)").forEach(b=>b.onclick=()=>eqMenu(b.dataset.p,b.dataset.o,b.dataset.eq))}
+  $("equipoLista").querySelectorAll(".eq-obj:not(:disabled)").forEach(b=>b.onclick=()=>eqMenu(b.dataset.p,b.dataset.o,b.dataset.eq));
+  $("equipoLista").querySelectorAll("[data-pacto]:not(:disabled)").forEach(b=>b.onclick=()=>eqPacto(b.dataset.pacto))}
+// Pacto del Filo: forma del arma (cuerpo a cuerpo) y cómo se empuña. Queda invocada hasta despedirla (tocarla y «Guardar») o invocar otra.
+function eqPacto(q){const pc=equipoPub.pacto[q],L=equipoPub.lugares;
+  abrirHoja(`${q}: forma del arma de pacto`,pc.formas.map(f=>({t:`${f.forma} (${f.dano})`,v:f})),f=>
+    f.lugares.length===1?(equipoCambios.push({tipo:"pacto",persona:q,forma:f.forma,lugar:f.lugares[0]}),$("equipoEstado").textContent="",pintarEquipo())
+    :abrirHoja(`${f.forma}: ¿cómo la empuña?`,f.lugares.map(l=>({t:L[l],v:l})),l=>{equipoCambios.push({tipo:"pacto",persona:q,forma:f.forma,lugar:l});$("equipoEstado").textContent="";pintarEquipo()}))}
 function eqMenu(q,objeto,tipo){
   const v=equipoVista,L=equipoPub.lugares,nombres=Object.keys(v.personas);
   if(tipo==="c"){const x=v.comun.find(z=>z.objeto===objeto);if(!x)return;
@@ -759,6 +770,8 @@ function eqMenu(q,objeto,tipo){
       abrirHoja(`${quien} equipa ${objeto}`,(x.lugares||[]).map(l=>({t:L[l],v:l})),l=>{equipoCambios.push({tipo:"equipar",persona:quien,objeto,lugar:l});$("equipoEstado").textContent="";pintarEquipo()}));return}
   const p=v.personas[q],equipado=tipo==="e",x=(equipado?p.equipado:p.portado).find(z=>z.objeto===objeto);if(!x)return;
   const otros=nombres.filter(z=>z!==q),ops=[];
+  if(equipado&&String(objeto).startsWith("arma de pacto (")){
+    abrirHoja(objeto,[{t:"Despedirla (desaparece)",v:{tipo:"guardar",persona:q,objeto}}],c=>{equipoCambios.push(c);$("equipoEstado").textContent="";pintarEquipo()});return}
   if(equipado)ops.push({t:x.comun?"Guardar (vuelve a lo de la cuadrilla)":"Guardar (pasa a lo que porta)",v:{tipo:"guardar",persona:q,objeto}});
   else(x.lugares||[]).forEach(l=>ops.push({t:`Equipar: ${L[l]}`,v:{tipo:"equipar",persona:q,objeto,lugar:l}}));
   if(!x.comun){otros.forEach(o=>ops.push({t:`Dárselo a ${o}`+(!equipado&&x.cantidad>1?" (uno)":""),v:{tipo:"dar",persona:q,a:o,objeto,cantidad:1}}));
