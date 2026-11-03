@@ -561,6 +561,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const API="https://api.github.com";
+let nombresMapa=null;
 let cfg={repo:"",token:""}, etag=null, pedido=null, pendiente=null, enviados=new Set(), sondeo=null;
 
 function leerCfg(){try{cfg=JSON.parse(localStorage.getItem("mesa_cfg")||"{}");}catch(e){cfg={}}cfg.repo=cfg.repo||"";cfg.token=cfg.token||""}
@@ -705,6 +706,21 @@ const ritmoDe=v=>v==="sigilo"?"lento":v;
 function horaTexto(fecha,horas){const m=/T(\d\d):(\d\d)/.exec(fecha);let min=Number(m[1])*60+Number(m[2])+Math.round(horas*60);const dias=Math.floor(min/1440);min%=1440;
   return `${String(Math.floor(min/60)).padStart(2,"0")}:${String(min%60).padStart(2,"0")}${dias?` (${dias===1?"al día siguiente":`en ${dias} días`})`:""}`}
 const horasTexto=h=>h<0.75?`unos ${Math.max(5,Math.round(h*60/5)*5)} minutos`:Math.round(h)<=1?"cerca de una hora":`unas ${Math.round(h)} horas`;
+function aplicarNombresMapa(p){
+  if(!p||!nombresMapa||nombresMapa.piso!==p.piso)return p;
+  return {...p,lugares:(p.lugares||[]).map(([c,r,n])=>{
+    const candidatos=(nombresMapa.lugares||[]).filter(x=>x[0]===c&&x[1]===r).map(x=>x[2]);
+    return [c,r,/^(un )?lugar que ya conocen$/i.test(n)&&candidatos.length?candidatos.join(" · "):n];
+  })};
+}
+async function cargarNombresMapa(){
+  nombresMapa=null;const repo=cfg.repo;
+  try{const r=await fetch(`${API}/repos/${repo}/contents/nombres_mapa.json`,{headers:cabeceras(),cache:"no-store"});
+    if(!r.ok||repo!==cfg.repo)return;const j=await r.json(),x=JSON.parse(deB64(j.content));
+    if(!Array.isArray(x.lugares)||!x.lugares.every(a=>Array.isArray(a)&&a.length===3&&Number.isInteger(a[0])&&Number.isInteger(a[1])&&typeof a[2]==="string"))return;
+    nombresMapa=x;if(piso)pintarPiso(piso);
+  }catch(e){} // Compatibilidad opcional: la vista nueva ya trae sus propios nombres.
+}
 function nombresHexPiso(p,c,r){return (p.lugares||[]).filter(x=>x[0]===c&&x[1]===r).map(x=>x[2])}
 function pintarLugaresPiso(p){
   $("lugaresPiso").innerHTML=(p.lugares||[]).map(([c,r,n])=>`<button type="button" class="sec" data-lugar-hp="${c},${r}" aria-pressed="${selPiso===c+","+r}">◆ ${esc(n)} · ${c},${r}</button>`).join("");
@@ -835,7 +851,7 @@ function pintarCarga(c){
   if(c.sin_peso.length)h+=`<div class="estado">Sin peso asignado todavía: ${c.sin_peso.map(esc).join("; ")}</div>`;
   $("cargaDetalle").innerHTML=h}
 function pintarPiso(p){
-  piso=p; $("panelPiso").hidden=!p; if(!p)return;
+  p=aplicarNombresMapa(p);piso=p; $("panelPiso").hidden=!p; if(!p)return;
   $("tituloPiso").textContent=`Piso ${p.piso}`;
   const R=14, W=Math.sqrt(3)*R, cx=c=>R*1.5*c+R*1.2, cy=(c,r)=>W*(r+0.5*(c&1))+W*0.6;
   const pts=(c,r)=>[0,1,2,3,4,5].map(i=>{const a=Math.PI/3*i;return(cx(c)+R*Math.cos(a)).toFixed(1)+","+(cy(c,r)+R*Math.sin(a)).toFixed(1)}).join(" ");
@@ -2031,7 +2047,7 @@ async function sondear(){
 function arrancar(){
   leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;cargarDeclaracion();
   if(!cfg.repo||!cfg.token){$("ajustes").hidden=false;$("mensaje").textContent="Falta la conexión: pon el repositorio y el token.";return}
-  if(sondeo)clearInterval(sondeo);etag=null;sondear();sondeo=setInterval(sondear,2000);
+  if(sondeo)clearInterval(sondeo);etag=null;cargarNombresMapa();sondear();sondeo=setInterval(sondear,2000);
 }
 
 $("abrirAjustes").addEventListener("click",()=>{$("ajustes").hidden=!$("ajustes").hidden});
