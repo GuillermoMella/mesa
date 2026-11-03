@@ -243,6 +243,7 @@ select.oculto{display:none}
 .lugar-piso{fill:#f2d06b;stroke:#0b0e13;stroke-width:1.2;pointer-events:none}
 .anotado-piso{fill:none;stroke:#e0a458;stroke-width:2;stroke-dasharray:3 2;pointer-events:none}
 .pos-piso{fill:var(--acento,#8b7cf6);stroke:#fff;stroke-width:2;pointer-events:none}
+.lugares-piso-lista{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.lugares-piso-lista button{width:auto;min-height:40px;text-align:left;white-space:normal;padding:7px 10px}
 .ley-piso{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.85rem;margin-top:8px}.ley-piso i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .abierto{stroke:#6cb6ff;stroke-width:3;stroke-dasharray:1 5;stroke-linecap:round;pointer-events:none}
 .hxt.salida{fill:#6cb6ff;font-size:13px}
@@ -469,6 +470,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="provPiso"></div>
     <div id="mapaPiso" aria-label="Mapa del piso: lo que ya viste"></div>
     <div class="ley-piso" id="leyPiso"></div>
+    <div class="lugares-piso-lista" id="lugaresPiso" role="group" aria-label="Lugares conocidos del mapa"></div>
     <details class="carga" id="cargaPiso" hidden><summary class="eyebrow" id="cargaResumen">Carga</summary><div id="cargaDetalle"></div></details>
     <div class="sub" id="preguntaForzada" hidden>
       <div class="eyebrow">Llevan ocho horas de marcha</div>
@@ -703,16 +705,22 @@ const ritmoDe=v=>v==="sigilo"?"lento":v;
 function horaTexto(fecha,horas){const m=/T(\d\d):(\d\d)/.exec(fecha);let min=Number(m[1])*60+Number(m[2])+Math.round(horas*60);const dias=Math.floor(min/1440);min%=1440;
   return `${String(Math.floor(min/60)).padStart(2,"0")}:${String(min%60).padStart(2,"0")}${dias?` (${dias===1?"al día siguiente":`en ${dias} días`})`:""}`}
 const horasTexto=h=>h<0.75?`unos ${Math.max(5,Math.round(h*60/5)*5)} minutos`:Math.round(h)<=1?"cerca de una hora":`unas ${Math.round(h)} horas`;
+function nombresHexPiso(p,c,r){return (p.lugares||[]).filter(x=>x[0]===c&&x[1]===r).map(x=>x[2])}
+function pintarLugaresPiso(p){
+  $("lugaresPiso").innerHTML=(p.lugares||[]).map(([c,r,n])=>`<button type="button" class="sec" data-lugar-hp="${c},${r}" aria-pressed="${selPiso===c+","+r}">◆ ${esc(n)} · ${c},${r}</button>`).join("");
+  $("lugaresPiso").querySelectorAll("[data-lugar-hp]").forEach(b=>b.onclick=()=>{selPiso=b.dataset.lugarHp;pintarPiso(p)});
+}
 function preseleccion(){
   const p=piso; if(!p||!selPiso){$("irPiso").disabled=true;return}
-  const d=selPiso.split(",").map(Number), t=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1])[2];
-  if(selPiso===p.pos.join(",")){$("infoPiso").textContent="Ahí están ahora.";$("irPiso").disabled=true;return}
+  const d=selPiso.split(",").map(Number), hex=p.hexes.find(x=>x[0]===d[0]&&x[1]===d[1]), t=hex?.[2], nombres=nombresHexPiso(p,...d).join(" · ");
+  if(!hex){$("infoPiso").textContent=(nombres?nombres+". ":"")+"Todavía no conocen un camino hasta esa casilla.";$("irPiso").disabled=true;return}
+  if(selPiso===p.pos.join(",")){$("infoPiso").textContent=(nombres?nombres+". ":"")+"Ahí están ahora.";$("irPiso").disabled=true;return}
   const forr=["forrajear"].includes($("actividadPiso").value)&&$("ritmoPiso").value==="rapido";
   const r=rutaPiso(p,p.pos,d,ritmoDe($("ritmoPiso").value));
-  if(!r){$("infoPiso").innerHTML=`${esc(t.replace(/_/g," "))}: por lo que ya vieron no hay camino.`;$("irPiso").disabled=true;return}
+  if(!r){$("infoPiso").innerHTML=`${nombres?esc(nombres)+" · ":""}${esc(t.replace(/_/g," "))}: por lo que ya vieron no hay camino.`;$("irPiso").disabled=true;return}
   const hoy=p.marcha_hoy||0, total=hoy+r.horas, lim=p.horas_de_marcha;
   const extra=[];for(let k=lim+1;k<=Math.floor(total+1e-9);k++)if(k>hoy+1e-9)extra.push(k);
-  const lineas=[`<b>${esc(t.replace(/_/g," "))}</b>: ${r.hexes} hexágono${r.hexes===1?"":"s"}, ${horasTexto(r.horas)} de marcha.`,
+  const lineas=[`<b>${esc(nombres||t.replace(/_/g," "))}</b>${nombres?" · "+esc(t.replace(/_/g," ")):""}: ${r.hexes} hexágono${r.hexes===1?"":"s"}, ${horasTexto(r.horas)} de marcha.`,
     `Llegarían a las ${horaTexto(p.fecha,r.horas)}. ${hoy<0.05?"Hoy todavía no marcharon":`Hoy llevan ${horasTexto(hoy)} de marcha`}; con esto, ${horasTexto(total)} en el día.`];
   if(r.requiere.length)lineas.push(`En el camino hay que ${r.requiere.join(" y ")}.`);
   const yaForzada=hoy>=lim-1e-9;
@@ -833,7 +841,7 @@ function pintarPiso(p){
   const pts=(c,r)=>[0,1,2,3,4,5].map(i=>{const a=Math.PI/3*i;return(cx(c)+R*Math.cos(a)).toFixed(1)+","+(cy(c,r)+R*Math.sin(a)).toFixed(1)}).join(" ");
   const rec=new Set(p.recorridos.map(h=>h.join(","))), xs=[...p.hexes,...(p.anotados||[])].map(h=>cx(h[0])), ys=[...p.hexes,...(p.anotados||[])].map(h=>cy(h[0],h[1]));  // el encuadre incluye lo visto de lejos o contado
   // Las etiquetas de lo anotado salen a la derecha del círculo: el encuadre les deja lugar para que no se corten.
-  const etq=n=>n.includes(";")?n.split(";")[1].split(" (")[0].split(",").slice(0,2).join(",").trim():n.split(/[(:]/)[0].trim(), finEtq=(p.anotados||[]).map(([c,r,n])=>cx(c)+8+etq(n).length*6);
+  const etq=n=>n.includes(";")?n.split(";")[1].split(" (")[0].split(",").slice(0,2).join(",").trim():n.split(/[(:]/)[0].trim(), finEtq=[...(p.anotados||[]).map(([c,r,n])=>cx(c)+8+etq(n).length*6),...(p.lugares||[]).map(([c,r,n])=>cx(c)+7+String(n).length*6)];
   const x0=Math.min(...xs)-R*1.5, y0=Math.min(...ys)-W, w=Math.max(...xs,...finEtq)-x0+R*1.5, h=Math.max(...ys)-y0+W;
   let svg=p.hexes.map(([c,r,t])=>`<polygon points="${pts(c,r)}" data-hp="${c},${r}" class="hxp ${rec.has(c+","+r)?"rec":""} ${selPiso===c+","+r?"sel":""}" style="fill:${p.terrenos[t].color}"><title>${esc(t.replace(/_/g," "))}</title></polygon>`).join("");
   (p.enlaces||[]).forEach(([c1,r1,c2,r2,min,sent,req])=>{const rot=(req?`hay que ${req}`:"escalera")+`, ${min} min`;
@@ -859,10 +867,11 @@ function pintarPiso(p){
   const pf=p.pregunta_forzada; $("preguntaForzada").hidden=!pf;
   if(pf){const r=rutaPiso(p,p.pos,pf.destino.split(",").map(Number),pf.ritmo);
     $("textoForzada").textContent=`Iban hacia ${pf.destino}; les faltan ${r?horasTexto(r.horas):"tramos que ya no ven"}. Seguir es marcha forzada, con riesgo de agotamiento.`}
-  $("leyPiso").innerHTML=((p.anotados||[]).length?`<span><i style="background:transparent;border:2px dashed #e0a458;border-radius:50%"></i>visto de lejos o contado</span>`+p.anotados.map(([c,r,n])=>`<span>◌ ${c},${r}: ${esc(n)}</span>`).join(""):"")+((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugar que ya conocen</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
+  $("leyPiso").innerHTML=((p.anotados||[]).length?`<span><i style="background:transparent;border:2px dashed #e0a458;border-radius:50%"></i>visto de lejos o contado</span>`+p.anotados.map(([c,r,n])=>`<span>◌ ${c},${r}: ${esc(n)}</span>`).join(""):"")+((p.lugares||[]).length?`<span><i style="background:#f2d06b;transform:rotate(45deg);width:9px;height:9px"></i>lugares conocidos (◆)</span>`:"")+Object.entries(p.terrenos).map(([t,x])=>`<span><i style="background:${x.color}"></i>${esc(t.replace(/_/g," "))}${x.min==null?" (no se pasa)":x.requiere?` (hay que ${x.requiere})`:""}</span>`).join("")+`<span><i style="background:transparent;border:1.5px solid #c9d4e3"></i>recorrido</span>`;
 
   $("mapaPiso").querySelectorAll("[data-hp]").forEach(el=>el.onclick=()=>{
     selPiso=el.dataset.hp; pintarPiso(p)});
+  pintarLugaresPiso(p);
   preseleccion();
 }
 
