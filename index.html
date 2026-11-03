@@ -553,6 +553,11 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section class="panel pane" id="panelRegistro" data-pane="registro" hidden>
     <div class="eyebrow">Lo que pasó</div>
     <ol class="registro" id="registro"></ol>
+    <div id="bloqueDerrotados" hidden>
+      <div class="eyebrow">Enemigos derrotados</div>
+      <label>Quién <select id="personaDerrotados"></select></label>
+      <ul class="registro" id="listaDerrotados"></ul>
+    </div>
   </section>
 
   <div class="pie"><span id="conexion">Sin conectar</span><span id="hora"></span></div>
@@ -593,10 +598,22 @@ function pintar(e){
   pintarSubida(e.subida||null);
   pintarPiso(e.combate?null:(e.exploracion||null));
   pintarEquipo(e.equipo||null);
+  pintarDerrotados(e.derrotados||null);
   hojaPJ=e.hoja||null; $("abrirHoja").hidden=!hojaPJ; if(!$("hoja").hidden)pintarHoja();
   pintarConm();
 }
 
+
+// ---- Enemigos derrotados por cada uno (tools/enemigos_derrotados.py): lo que conoce por haberlos visto caer ----
+let derrotados=null;
+function pintarDerrotados(d){
+  derrotados=d;const quienes=d?Object.keys(d):[];$("bloqueDerrotados").hidden=!quienes.length;if(!quienes.length)return;
+  const sel=$("personaDerrotados"),prev=sel.value||"Shalock";
+  sel.innerHTML=quienes.map(q=>`<option value="${esc(q)}">${esc(q)}</option>`).join("");
+  sel.value=quienes.includes(prev)?prev:quienes[0];
+  $("listaDerrotados").innerHTML=(d[sel.value]||[]).map(x=>`<li>${esc(x.nombre)} <b>×${x.derrotados}</b></li>`).join("");
+}
+$("personaDerrotados").addEventListener("change",()=>pintarDerrotados(derrotados));
 
 // ---- Hoja de personaje: se llena sola con lo que publica tools/hoja_pj.py ----
 let hojaPJ=null, estiloActual=null;
@@ -1976,6 +1993,9 @@ async function enviarReaccion(t){
 $("atacarReaccion").addEventListener("click",async()=>{
   const s=combate.shalock, rp=combate.reaccion_pendiente;
   const atq=tirarAtaque($("armaReaccion").value,rp.objetivo,null,impactosPara(rp.objetivo,null));
+  // Preparada de varios impactos: todos salen contra quien la disparó (el motor abre la serie).
+  const n=rp.tipo==="preparada"?cantidadImpactos(ataque(atq.id)):1;
+  if(n>1){atq.objetivos_impactos=Array(n).fill(rp.objetivo);atq.indice_impacto=0}
   try{const id=await enviarReaccion({tipo:"reaccion",ataque:atq,preparada:rp.tipo==="preparada",ts:Date.now()});enCurso=Object.assign({tirada:id+".json"},atq);guardarEnCurso();$("panelReaccion").hidden=true;pintarDano()}
   catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}
 });
