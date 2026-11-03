@@ -308,13 +308,28 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .fj-cant{display:flex;align-items:center;gap:8px}.fj-cant input{width:80px}
 .forja label.check{display:flex;gap:8px;align-items:center;color:var(--fg)}
 @media (prefers-reduced-motion:no-preference){.dado.rueda{animation:r .35s ease-out}@keyframes r{from{transform:rotate(-200deg) scale(.6);opacity:.3}to{transform:none;opacity:1}}}
+
+/* Turnos de campaña y conversación con el DM */
+.actividades-opciones{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.actividades-opciones button{width:auto;min-height:40px;padding:7px 10px}
+.actividades-opciones button[aria-pressed="true"]{outline:2px solid currentColor}
+.actividad-detalle{border:1px solid #65728555;border-radius:8px;padding:10px;margin:8px 0}
+.actividad-detalle textarea,#mensajeDM{width:100%;min-height:85px;resize:vertical;box-sizing:border-box}
+.actividad-cab{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.actividad-cab strong{flex:1}
+.actividad-cab button{width:auto;min-height:36px;padding:3px 9px}
+#relato{max-height:60vh;overflow:auto;overflow-wrap:anywhere}
+.relato-entrada{padding:12px 0;border-bottom:1px solid #65728555}
+.relato-entrada p{white-space:pre-wrap;line-height:1.65;margin:6px 0}
+.relato-entrada small{opacity:.75}
+#estadoRelato,#estadoDeclaracion{white-space:pre-wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="listo" style="width:auto;min-height:44px;padding:6px 14px">Listo</button><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="listo" style="width:auto;min-height:44px;padding:6px 14px">Listo</button><button class="sec" id="abrirDeclaracion">Escribir al DM</button><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
   </header>
 
   <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
@@ -419,6 +434,20 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section class="panel pane" data-pane="mesa" aria-live="polite">
     <div class="eyebrow">Lo que dice el DM</div>
     <p id="mensaje">Conectando…</p>
+
+    <div id="relato" role="log" aria-label="Conversación de la partida" aria-live="polite"></div>
+    <div class="estado" id="estadoRelato"></div>
+    <div class="sub" id="declaracion">
+      <h2>¿Qué quieres hacer?</h2>
+      <p>Combina las actividades que necesites y escribe lo que intentas. Se resuelven en el orden elegido, hasta la próxima decisión de la escena.</p>
+      <div class="actividades-opciones" id="actividadesOpciones" role="group" aria-label="Actividades del turno"></div>
+      <div id="actividadesDetalles"></div>
+      <label for="mensajeDM">Mensaje para el DM <span class="estado">Siempre disponible, con o sin actividades.</span></label>
+      <textarea id="mensajeDM" maxlength="12000" placeholder="Lo que dices, haces, preguntas o quieres aclarar…"></textarea>
+      <p class="estado">En combate, arma tus acciones en «Mi turno»; aquí puedes añadir diálogo e intenciones. «Listo» avisa al DM cuando quieras su respuesta.</p>
+      <button id="enviarDeclaracion">Listo · enviar al DM</button>
+      <div class="estado" id="estadoDeclaracion" role="status"></div>
+    </div>
     <div class="sub" id="panelSubida" hidden></div>
   </section>
 
@@ -836,19 +865,109 @@ function pintarPiso(p){
     selPiso=el.dataset.hp; pintarPiso(p)});
   preseleccion();
 }
-// «Listo»: avisa al DM que ya mandó lo de este turno (lo mismo que escribirlo en el chat). Despierta al DM una sola vez.
-$("listo").addEventListener("click",async()=>{
-  if(!cfg||!cfg.repo){$("conexion").textContent="Primero conecta la mesa";return}
-  const nota=window.prompt("¿Algo para el DM? (opcional)","");
-  if(nota===null)return;
-  const b=$("listo"),ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
-  b.disabled=true;
-  try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/listo/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"listo",content:b64(JSON.stringify({tipo:"listo",nota:nota.trim(),ts}))})});
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    $("conexion").textContent="Listo enviado: el DM ya fue avisado"}
-  catch(e){$("conexion").textContent="No se pudo enviar Listo ("+e.message+")"}
-  finally{setTimeout(()=>{b.disabled=false},3000)}
-});
+
+// ---- Intenciones de campaña y narración (catálogo compartido con el puente) ----
+const ACTIVIDADES_APP={"version":1,"generales":["Estas actividades son intenciones combinables en el orden declarado, no una autorización para resolverlas todas sin pausas. Detenerse en el primer punto que requiera respuesta o elección.","Leer system/MESA.md y system/reglas_del_jugador.md; aplicar reglas vigentes, herramientas y transacciones validadas. No inventar resultados ni ejecutar acciones no declaradas.","Si el vigilante ya resolvió una acción, usar sus resultados: nunca repetir tiradas, gastos, movimientos, compras ni descansos para leer la salida.","Antes de representar a cualquier PNJ, consultar personalidad, voz, relación, conocimientos y ánimo. Interpretar esos rasgos según la escena, sin convertirlos en tics obligatorios ni imponer humor fuera de lugar.","Mostrar solo lo que el personaje percibe o conoce; sin secretos, fichas privadas, instrucciones internas ni identificadores del DM.","Registrar los cambios confirmados y actualizar las vistas afectadas antes de narrar su resultado.","Toda narración, pregunta, diálogo o aclaración dirigida al jugador se publica en la app mediante mesa_remota.py narrar; el chat de Claude queda para errores operativos. Después se vuelve al monitor existente."],"categorias":[{"id":"social","nombre":"Conversar e interactuar","ayuda":"Con quién hablas y qué dices o intentas.","instrucciones":["Consultar ficha, temperamento, voz, relación, conocimiento y ánimo de cada PNJ antes de representarlo.","Actuar su personalidad con ritmo, vocabulario y conducta propios, modulados por la situación: el humor no obliga a bromear en un funeral ni borra dolor, miedo o respeto.","Los compañeros tienen iniciativa y autonomía; no imponer un coro de opiniones ni convertir al PJ en líder por defecto.","Detenerse en la primera réplica o gesto que requiera respuesta; registrar conocimiento y consecuencias sociales solo si corresponde."]},{"id":"negociar","nombre":"Negociar y acordar","ayuda":"Propuesta, condiciones, interlocutor y límites que quieres plantear.","instrucciones":["Resolver intereses, autoridad, recursos y relación de las partes; una prueba no sustituye la conversación ni garantiza obediencia.","Distinguir propuesta, contraoferta y acuerdo aceptado; no aceptar ni gastar por el jugador.","Detallar precio, alcance, obligaciones, plazos y devolución si procede; guardar literalmente lo acordado.","Auditar cambios sociales o políticos cuando el hecho sea relevante, con canal y evidencia; no propagar reputación automáticamente."]},{"id":"comercio","nombre":"Comprar, vender e intercambiar","ayuda":"Artículos, cantidades, quién compra o vende y presupuesto, si lo defines.","instrucciones":["Comprobar existencias, propiedad, cantidades, dinero, precios vigentes y disposición del comerciante con herramientas.","Presentar oferta y condiciones antes de confirmar; una intención de comprar o vender no autoriza cualquier precio.","Al consumarse el trato, registrar una sola vez dinero de ambas partes cuando corresponda, objetos, cantidades, dueño, portador, peso y provisiones; no limitarse a narrar la entrega.","Actualizar la vista de equipo y recursos después de registrar; conservar comprobantes y no duplicar un trato al reintentar."]},{"id":"traslado","nombre":"Trasladarse y viajar","ayuda":"Destino o dirección, ruta, ritmo y precauciones.","instrucciones":["Leer posición y ruta perceptible; avanzar solo el tramo declarado hasta el primer desvío, peligro o decisión.","Aplicar tiempo, terreno, ritmo, carga, luz, provisiones, marcha forzada y encuentros mediante las herramientas pertinentes.","No ejecutar un traslado dos veces si el vigilante o el mapa ya lo resolvió; usar sus recibos.","Revisar relojes al avanzar el tiempo y narrar las señales perceptibles del trayecto, sin prometer seguridad ni revelar mapa oculto."]},{"id":"explorar","nombre":"Explorar y reconocer","ayuda":"Qué zona reconoces y cómo lo haces.","instrucciones":["Usar el mapa y las presencias existentes; no crear hallazgos convenientes por una etiqueta.","Distinguir lo visto, lo oído y lo supuesto; atender sentidos, luz, cobertura, sigilo y conocimiento previo.","Aplicar solo tiempo, riesgo y tiradas pertinentes; detenerse ante el primer descubrimiento o decisión que cambie la intención.","Registrar descubrimientos y conocimiento por canal real; publicar solo la parte conocida del mapa."]},{"id":"investigar","nombre":"Investigar y buscar información","ayuda":"Qué examinas, qué buscas y por qué medio.","instrucciones":["Precisar objeto, pregunta, método y fuentes disponibles; no asumir una conclusión o una búsqueda exhaustiva.","Resolver si hace falta prueba, su tiempo y consecuencias; pedir la tirada a la app, sin inventarla ni repetirla para mejorar el resultado.","Entregar indicios accesibles al método y resultado; distinguir testimonio, rumor y deducción de hechos comprobados.","Registrar nueva información, canal y fuente, y revisar experiencia solo por logros que la merezcan."]},{"id":"objetos","nombre":"Usar objetos e interactuar con el entorno","ayuda":"Objeto o elemento y qué quieres hacer con él.","instrucciones":["Comprobar posesión, alcance, manos, herramientas, estado, cantidad, uso y restricciones del objeto o elemento.","Resolver coste de acción, consumos y riesgos cuando proceda; no equipar ni gastar algo distinto de lo declarado.","Registrar consumo, traslado, desgaste o cambio de estado confirmado y actualizar las vistas afectadas."]},{"id":"magia","nombre":"Lanzar magia o usar capacidades","ayuda":"Conjuro o capacidad, objetivos, intención y elecciones.","instrucciones":["Leer la regla oficial registrada, objetivos, alcance, visibilidad, tiempo, componentes, concentración y recursos.","Resolver elecciones y gasto con herramientas; solicitar en la app las tiradas necesarias.","No aplicar de nuevo capacidades, ataques, curaciones o espacios ya resueltos por el motor; usar los recibos.","La magia no da información, alcance ni efectos fuera de su regla; publicar duración y efectos que el jugador pueda conocer."]},{"id":"descanso","nombre":"Descansar, acampar y esperar","ayuda":"Tipo de descanso o espera, duración y preparativos.","instrucciones":["Comprobar terreno, seguridad, horario, último descanso y límites; no convertir una propuesta en descanso completado.","Aplicar una sola vez tiempo, encuentros, interrupciones, provisiones, luz, agotamiento y recuperación mediante herramientas.","Conservar el progreso real si se interrumpe, sin volver a tirar un tramo ya resuelto.","Detenerse si surge una decisión; actualizar recursos y reloj al resolver."]},{"id":"trabajo","nombre":"Trabajar, fabricar y entrenar","ayuda":"Tarea, materiales, herramientas, dedicación y objetivo.","instrucciones":["Comprobar competencia, herramientas, instalaciones, materiales, dinero y tiempo disponibles según la regla o acuerdo registrado.","Ofrecer costes y duración antes de comprometer recursos no autorizados; distinguir encargo, avance y producto terminado.","Registrar progreso, consumos, pagos y producto o aprendizaje solo al cumplirse sus requisitos; avanzar tiempo y revisar relojes."]},{"id":"cuadrilla","nombre":"Organizar la cuadrilla y repartir","ayuda":"Propuesta de reparto, tarea, equipo o acuerdo del grupo.","instrucciones":["Leer propiedad, carga, acuerdos y autonomía de los compañeros; el jugador declara su propuesta, no la decisión de todos.","Representar aceptación, desacuerdo o iniciativa según motivos y conocimiento de cada persona.","Registrar solo el reparto o acuerdo realmente aceptado, con dueño, portador, cantidades y carga; no duplicar transferencias hechas en Equipo."]},{"id":"gestion","nombre":"Encargos, organizaciones y asuntos pendientes","ayuda":"Encargo, compromiso, organización o asunto que quieres atender.","instrucciones":["Consultar compromisos, plazos, autoridad y recursos pertinentes, sin abrir ni simular todo el mundo.","Distinguir propuesta de decisión autorizada; registrar contratos y cambios verificables, con valor anterior esperado.","Aplicar consecuencias políticas o sociales solo con canal, evidencia y afectados concretos; no atribuir conocimiento global."]},{"id":"combate","nombre":"Combatir","ayuda":"Intención, coordinación o aclaración para las acciones de combate.","instrucciones":["Usar los ataques, movimientos, reacciones, recursos y recibos del motor existente; no resolver de nuevo lo ya enviado desde Mi turno.","Respetar iniciativas, economía de acciones, objetivos por impacto, visibilidad y ventanas de reacción.","Narrar resultados perceptibles con voz y conducta de los combatientes, sin mostrar CA oculta, estadísticas ni decisiones del enemigo.","Pedir las elecciones o tiradas pendientes en la app y detenerse antes de decidir por el PJ."]},{"id":"libre","nombre":"Otra acción o aclaración","ayuda":"Cualquier acción, diálogo, pregunta o corrección que no encaje arriba.","instrucciones":["Interpretar la intención expresada y consultar solo los protocolos pertinentes.","Si falta una elección imprescindible, preguntarla por la app antes de aplicar cambios; no forzar una categoría ni inventar consentimiento."]}]};
+let declaracion={actividades:[],mensaje:""},salidaDeclaracion=null,esperasDM=[],relatoDM={mensajes:[]},etagRelato=null,leyendoRelato=false,firmaRelato="";
+const claveDeclaracion=()=>"mesa_partida_"+cfg.repo;
+function guardarDeclaracion(){localStorage.setItem(claveDeclaracion(),JSON.stringify({declaracion,salidaDeclaracion,esperasDM}))}
+function cargarDeclaracion(){
+  declaracion={actividades:[],mensaje:""};salidaDeclaracion=null;esperasDM=[];relatoDM={mensajes:[]};etagRelato=null;firmaRelato="";
+  try{const x=JSON.parse(localStorage.getItem(claveDeclaracion())||"{}");declaracion=x.declaracion||declaracion;salidaDeclaracion=x.salidaDeclaracion||null;esperasDM=x.esperasDM||[]}catch(e){}
+  $("mensajeDM").value=declaracion.mensaje||"";pintarActividades();pintarRelato();
+  $("estadoDeclaracion").textContent=salidaDeclaracion?"Hay un envío pendiente: pulsa Listo para reenviar el mismo mensaje.":"";
+}
+function catalogoActividad(id){return ACTIVIDADES_APP.categorias.find(x=>x.id===id)}
+function guardarBorrador(){try{guardarDeclaracion()}catch(e){$("estadoDeclaracion").textContent="No se pudo guardar el borrador en este dispositivo."}}
+function pintarActividades(){
+  const opciones=$("actividadesOpciones"),detalles=$("actividadesDetalles");opciones.replaceChildren();detalles.replaceChildren();
+  for(const c of ACTIVIDADES_APP.categorias){
+    const b=document.createElement("button");b.type="button";b.className="sec";b.textContent=c.nombre;
+    const i=declaracion.actividades.findIndex(x=>x.id===c.id);b.setAttribute("aria-pressed",String(i>=0));b.disabled=!!salidaDeclaracion;
+    b.onclick=()=>{if(i>=0)declaracion.actividades.splice(i,1);else declaracion.actividades.push({id:c.id,detalle:""});guardarBorrador();pintarActividades()};opciones.appendChild(b);
+  }
+  declaracion.actividades.forEach((a,i)=>{
+    const c=catalogoActividad(a.id);if(!c)return;
+    const bloque=document.createElement("div");bloque.className="actividad-detalle";
+    const cab=document.createElement("div");cab.className="actividad-cab";const nombre=document.createElement("strong");nombre.textContent=`${i+1}. ${c.nombre}`;cab.appendChild(nombre);
+    for(const [texto,delta] of [["↑",-1],["↓",1],["Quitar",0]]){
+      const b=document.createElement("button");b.type="button";b.className="sec";b.textContent=texto;b.setAttribute("aria-label",delta?`${delta<0?"Subir":"Bajar"} ${c.nombre}`:`Quitar ${c.nombre}`);
+      b.disabled=!!salidaDeclaracion||(delta!==0&&(i+delta<0||i+delta>=declaracion.actividades.length));
+      b.onclick=()=>{if(!delta)declaracion.actividades.splice(i,1);else [declaracion.actividades[i],declaracion.actividades[i+delta]]=[declaracion.actividades[i+delta],declaracion.actividades[i]];guardarBorrador();pintarActividades()};cab.appendChild(b);
+    }
+    const label=document.createElement("label");label.textContent=c.ayuda;const campo=document.createElement("textarea");campo.maxLength=6000;campo.value=a.detalle;campo.disabled=!!salidaDeclaracion;campo.setAttribute("aria-label",c.nombre);
+    campo.oninput=()=>{a.detalle=campo.value;guardarBorrador()};label.appendChild(campo);bloque.append(cab,label);detalles.appendChild(bloque);
+  });
+  $("mensajeDM").disabled=!!salidaDeclaracion;$("enviarDeclaracion").textContent=salidaDeclaracion?"Reenviar el mismo mensaje":"Listo · enviar al DM";
+}
+function notaCompatible(id,datos){
+  const lineas=[`Turno de la app: ${id}`,"Intenciones del jugador, en orden:"];
+  for(const [i,a] of datos.actividades.entries()){const c=catalogoActividad(a.id);lineas.push(`${i+1}. ${c.nombre}: ${a.detalle||"(sin detalle)"}`)}
+  lineas.push("Mensaje del jugador: "+(datos.mensaje||"(sin mensaje adicional)"),"Protocolo del DM:",...ACTIVIDADES_APP.generales.map(x=>"- "+x));
+  for(const a of datos.actividades){const c=catalogoActividad(a.id);lineas.push(c.nombre+":",...c.instrucciones.map(x=>"- "+x))}
+  lineas.push(`Publicar toda respuesta al jugador: python tools/mesa_remota.py narrar RESPUESTA.txt --turno ${id}`,"RESPUESTA.txt contiene solo la narración pública. Después, volver al monitor existente. No repetir acciones resueltas por el vigilante.");
+  return lineas.join("\n");
+}
+function paqueteDeclaracion(id,ts){
+  const actividades=declaracion.actividades.map(x=>({id:x.id,detalle:x.detalle.trim()})),mensaje=declaracion.mensaje.trim();
+  if(actividades.some(x=>!catalogoActividad(x.id)||x.detalle.length>6000)||mensaje.length>12000)throw Error("Revisa las actividades y la longitud del mensaje");
+  const datos={tipo:"listo",version:1,actividades,mensaje,ts};datos.nota=notaCompatible(id,datos);return datos;
+}
+async function enviarDeclaracion(){
+  if(!cfg.repo||!cfg.token){$("estadoDeclaracion").textContent="Primero conecta la mesa.";return}
+  const b=$("enviarDeclaracion"),arriba=$("listo");if(b.disabled||arriba.disabled)return;
+  b.disabled=true;arriba.disabled=true;
+  try{
+    if(!salidaDeclaracion){const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,9)}`;salidaDeclaracion={id,t:paqueteDeclaracion(id,ts)}}
+    // Guardar ANTES de enviar: una recarga o un fallo de red no crea otra intención.
+    guardarDeclaracion();pintarActividades();$("estadoDeclaracion").textContent="Enviando…";
+    const {id,t}=salidaDeclaracion,url=`${API}/repos/${cfg.repo}/contents/listo/${id}.json`;
+    const r=await fetch(url,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"turno de campaña",content:b64(JSON.stringify(t))})});
+    if(!r.ok){
+      if(r.status!==409&&r.status!==422)throw Error("HTTP "+r.status);
+      const previo=await fetch(url,{headers:cabeceras(),cache:"no-store"});if(!previo.ok)throw Error("No se pudo comprobar el envío anterior");
+      const j=await previo.json();if(JSON.stringify(JSON.parse(deB64(j.content)))!==JSON.stringify(t))throw Error("El envío existente tiene otro contenido");
+    }
+    if(!esperasDM.some(x=>x.id===id))esperasDM.push({id,actividades:t.actividades,mensaje:t.mensaje,ts:t.ts});
+    salidaDeclaracion=null;declaracion={actividades:[],mensaje:""};$("mensajeDM").value="";guardarDeclaracion();pintarActividades();pintarRelato();
+    $("estadoDeclaracion").textContent="Enviado. Esperando la respuesta del DM aquí.";
+  }catch(e){$("estadoDeclaracion").textContent=`No se completó el envío (${e.message}). Pulsa Listo para reintentar el mismo mensaje.`}
+  finally{b.disabled=false;arriba.disabled=false}
+}
+function textoEntrada(entrada){
+  return (entrada.actividades||[]).map((a,i)=>`${i+1}. ${catalogoActividad(a.id)?.nombre||a.id}${a.detalle?": "+a.detalle:""}`).concat(entrada.mensaje?[entrada.mensaje]:[]).join("\n")||"Listo: acciones enviadas.";
+}
+function pintarRelato(){
+  const mensajes=relatoDM.mensajes||[],respondidos=new Set(mensajes.flatMap(m=>m.turnos||[]));
+  const restantes=esperasDM.filter(x=>!respondidos.has(x.id));
+  if(restantes.length!==esperasDM.length){esperasDM=restantes;guardarBorrador()}
+  $("estadoRelato").textContent=esperasDM.length?`Esperando respuesta del DM (${esperasDM.length} ${esperasDM.length===1?"mensaje":"mensajes"}).`:mensajes.length?"Narración actualizada.":"Las próximas respuestas del DM aparecerán aquí. El mensaje de escena actual se conserva arriba.";
+  const firma=JSON.stringify([mensajes,esperasDM]);if(firma===firmaRelato)return;firmaRelato=firma;
+  const box=$("relato"),alFinal=box.scrollHeight-box.scrollTop-box.clientHeight<50;box.replaceChildren();
+  function agregar(autor,texto,ts,error=false){const a=document.createElement("article");a.className="relato-entrada";const titulo=document.createElement("strong");titulo.textContent=autor+(error?" · aviso":"");const p=document.createElement("p");p.textContent=texto;a.append(titulo,p);if(ts){const fecha=document.createElement("small");fecha.textContent=new Date(ts).toLocaleString();a.appendChild(fecha)}box.appendChild(a)}
+  const mostradas=new Set();
+  for(const m of mensajes){for(const x of m.entradas||[]){if(!mostradas.has(x.id)){agregar("Tú",textoEntrada(x),x.ts);mostradas.add(x.id)}}agregar("DM",m.texto,m.ts,m.error)}
+  for(const x of esperasDM)if(!mostradas.has(x.id))agregar("Tú · esperando al DM",textoEntrada(x),x.ts);
+  if(alFinal)box.scrollTop=box.scrollHeight;
+}
+async function sondearRelato(){
+  if(leyendoRelato||!cfg.repo||!cfg.token)return;leyendoRelato=true;const repo=cfg.repo;
+  try{
+    const r=await fetch(`${API}/repos/${repo}/contents/relato.json`,{headers:cabeceras(etagRelato?{"If-None-Match":etagRelato}:{}),cache:"no-store"});
+    if(repo!==cfg.repo)return;if(r.status===304){pintarRelato();return}
+    if(r.status===404){pintarRelato();return}if(!r.ok)throw Error("HTTP "+r.status);
+    const j=await r.json(),datos=JSON.parse(deB64(j.content));if(!Array.isArray(datos.mensajes))throw Error("Historial inválido");
+    relatoDM=datos;pintarRelato();etagRelato=r.headers.get("ETag");
+  }catch(e){$("estadoRelato").textContent=`No se pudo actualizar la narración (${e.message}). Se reintentará automáticamente.`}
+  finally{leyendoRelato=false}
+}
+$("mensajeDM").addEventListener("input",()=>{declaracion.mensaje=$("mensajeDM").value;guardarBorrador()});
+$("mensajeDM").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();enviarDeclaracion()}});
+$("abrirDeclaracion").addEventListener("click",()=>{elegirPestana("mesa");$("declaracion").scrollIntoView({block:"start"});$("mensajeDM").focus()});
+$("enviarDeclaracion").addEventListener("click",enviarDeclaracion);
+$("listo").addEventListener("click",enviarDeclaracion);
+// ---- Fin de intenciones de campaña ----
+
 async function enviarExploracion(t){
   const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
   const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"exploración de Shalock",content:b64(JSON.stringify(t))})});
@@ -1885,6 +2004,7 @@ $("enviarParcial").addEventListener("click",()=>enviarTurno(envioTurno?envioTurn
 
 async function sondear(){
   if(!cfg.repo||!cfg.token)return;
+  sondearRelato();
   try{
     const h=cabeceras(etag?{"If-None-Match":etag}:{});
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/estado.json`,{headers:h,cache:"no-store"});
@@ -1900,7 +2020,7 @@ async function sondear(){
 }
 
 function arrancar(){
-  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;
+  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;cargarDeclaracion();
   if(!cfg.repo||!cfg.token){$("ajustes").hidden=false;$("mensaje").textContent="Falta la conexión: pon el repositorio y el token.";return}
   if(sondeo)clearInterval(sondeo);etag=null;sondear();sondeo=setInterval(sondear,2000);
 }
