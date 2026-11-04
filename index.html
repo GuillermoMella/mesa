@@ -1932,10 +1932,12 @@ function pintarDano(){
   const p=$("panelDano"); if(!combate||!enCurso){p.hidden=true;return}
   const lote=combate.shalock.lote_ataque;
   if(lote&&enCurso.impactos_tirados&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote)){
-    p.hidden=false;$("veredicto").textContent=(lote.resultados||[]).map(r=>`Impacto ${r.indice+1} contra ${r.objetivo}: ${r.critico?"crítico":r.impacta?"impacta":"falla"}`).join(" · ");
+    p.hidden=false;$("veredicto").textContent=(lote.resultados||[]).map(r=>`Impacto ${r.indice+1} contra ${r.objetivo}: ${r.critico?"crítico":r.impacta?"impacta":"falla"}${r.dano!=null?`, ${r.dano} de daño`:""}`).join(" · ");
     $("opcDano").hidden=true;$("cerrarDano").hidden=true;$("cfgSiguienteImpacto").hidden=true;
     $("estadoDano").textContent=lote.terminado?"Acción resuelta.":lote.pausa||combate.pausa||"Resolviendo los ataques ya tirados…";
-    if(lote.terminado){enCurso=null;guardarEnCurso();return}
+    // Resuelta: el resultado de cada impacto queda a la vista hasta «Cerrar resultado»; antes se borraba
+    // en cuanto llegaba y el jugador no veía los daños (GT-ERR-135).
+    if(lote.terminado){$("cerrarDano").textContent="Cerrar resultado";$("cerrarDano").disabled=false;$("cerrarDano").hidden=false;return}
     if(!lote.pausa)return;
     const entradas=enCurso.impactos_tirados,entrada=entradas[lote.indice];
     if(entrada&&lote.fase==="veredicto")enCurso={...enCurso,...entrada.ataque,tirada:lote.ref,raiz_lote:lote.raiz,indice_impacto:lote.indice,impactos_tirados:entradas};
@@ -2067,8 +2069,8 @@ async function cancelarImpactos(){
   catch(e){$("estadoDano").textContent=`No se pudo enviar (${e.message}). Reintenta: se conserva la misma decisión.`}
 }
 async function continuarImpacto(){
-  const s=combate.shalock.serie_impactos;
-  if(!s||s.terminada){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}
+  const s=combate.shalock.serie_impactos,lt=combate.shalock.lote_ataque;
+  if(!s||s.terminada||lt?.terminado&&(lt.raiz===enCurso?.tirada||lt.raiz===enCurso?.raiz_lote)){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}
   if(!enCurso.siguiente){
     if(s.espera!=="siguiente")return;
     const i=s.completados.length,obj=$("objetivoImpacto")?.value;
@@ -2162,7 +2164,7 @@ function resumen(t){
   const out=[];
   // Desglose completo: cada dado, el modificador y el total, para poder comprobarlo.
   const parte=d=>{const m=/([+-]\d+)$/.exec(d.expresion);const mod=d.dados.length&&m?` ${m[1][0]} ${m[1].slice(1)}`:"";return d.dados.length?`${d.expresion}: ${d.dados.join(" + ")}${mod} = ${d.total} ${d.tipo}`:`${d.total} ${d.tipo}`};
-  const txt=x=>!x?"":x.tipo==="ataque"?`${x.accion} → ${x.objetivo}: d20 ${x.d20.join(" / ")}${x.d20.length>1?` (se usa ${x.natural})`:""} ${x.bono>=0?"+":"−"} ${Math.abs(x.bono)}${x.bendicion?` + ${x.bendicion} (Bendición)`:""} = ${x.total}${x.critico?" · CRÍTICO":""}${x.danos?`. Daño si impacta: ${x.danos.map(parte).join("; ")}`:". El daño se tira si impacta."}`
+  const txt=x=>!x?"":x.tipo==="ataque"?`${x.accion} → ${x.objetivo}: d20 ${x.modo?`${x.d20.join(" / ")} (${x.modo}: se usa ${x.natural})`:x.natural} ${x.bono>=0?"+":"−"} ${Math.abs(x.bono)}${x.bendicion?` + ${x.bendicion} (Bendición)`:""} = ${x.total}${x.critico?" · CRÍTICO":""}${x.danos?`. Daño si impacta: ${x.danos.map(parte).join("; ")}`:". El daño se tira si impacta."}`
     :x.tipo==="opcion"?`${x.nombre}${x.objetivo?` → ${x.objetivo}`:""}${x.objetivos?` → ${x.objetivos.join(", ")}`:""}${x.curacion?`: cura ${parte(Object.assign({tipo:"PG"},x.curacion))}`:""}`
     :x.tipo==="comun"?x.nombre
     :x.tipo==="preparar"?`Preparar ${x.accion} (${x.al_ver?"cuando un enemigo entre en tu vista":`cuando un enemigo llegue a ${x.al_alcance} pies`})`:x.texto;
@@ -2185,7 +2187,7 @@ async function enviarTurno(parcial){
   if(!envioTurno){if(!revisar())return;const ts=Date.now();envioTurno={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:Object.assign(tirarTurno(),{parcial})}}
   const t=envioTurno.t, est=$("estadoTurno");
   $("resTurno").textContent=resumen(t);
-  if(t.accion?.impactos_tirados)$("resTurno").textContent+="\n"+t.accion.impactos_tirados.map((x,i)=>`Impacto ${i+1}: ${x.ataque.objetivo} · d20 ${x.ataque.d20.join(" / ")} · total ${x.ataque.total}`).join("\n");
+  if(t.accion?.impactos_tirados)$("resTurno").textContent+="\n"+t.accion.impactos_tirados.map((x,i)=>`Impacto ${i+1}: ${x.ataque.objetivo} · d20 ${x.ataque.modo?`${x.ataque.d20.join(" / ")} (${x.ataque.modo})`:x.ataque.d20[0]} · total ${x.ataque.total} · daño si impacta: ${x.danos.reduce((n,d)=>n+d.total,0)}`).join("\n");
   est.className="estado";est.textContent="Enviando…";$("enviarTurno").disabled=true;
   try{
     await subirTirada(envioTurno.id,t,"turno de Shalock");
