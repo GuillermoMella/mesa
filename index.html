@@ -324,14 +324,32 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .relato-entrada p{white-space:pre-wrap;line-height:1.65;margin:6px 0}
 .relato-entrada small{opacity:.75}
 #estadoRelato,#estadoDeclaracion{white-space:pre-wrap}
+
+/* Navegación por vistas: misma interfaz en móvil y escritorio. */
+#cabeceraApp{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#cabeceraApp h1{font-size:1.15rem;margin:0}#cabeceraApp .eyebrow{display:none}#cabeceraApp>div:last-child{margin-left:auto}
+#cabeceraApp #abrirHoja,#cabeceraApp #abrirForja,#cabeceraApp #abrirAjustes,#cabeceraApp #abrirDeclaracion{display:none}
+#tabs{display:none!important}.vista-oculta,.subvista-oculta{display:none!important}
+#fondoMenu{position:fixed;inset:0;background:#0009;z-index:60}
+#menuApp{position:fixed;inset:0 auto 0 0;width:min(86vw,340px);height:100dvh;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:16px;background:var(--panel);z-index:61;border-right:1px solid var(--line)}
+#menuApp button{display:block;width:100%;text-align:left;margin:5px 0;white-space:normal}
+#menuApp [aria-current="page"]{border-color:var(--ember);color:var(--fg)}.menu-sub{padding-left:14px;border-left:2px solid var(--line);margin-left:10px}
+#borradorTurno{font-size:.9rem;padding:10px}#partesTurno{padding-left:20px;max-height:25vh;overflow:auto}#partesTurno li{margin:7px 0}#partesTurno button{width:auto;margin-left:8px}
+#forja.hoja-pj,#hoja.hoja-pj{position:static;inset:auto;display:block;overflow:visible;background:transparent;padding:0;z-index:auto;max-height:none}
+#forja .forja{max-height:none}#panelPedido,#panelReaccion,#panelDano{scroll-margin-top:100px}
+@media(max-width:600px){.wrap{padding:10px;gap:10px}#cabeceraApp>div:first-of-type{display:none}#cabeceraApp button{min-height:44px}#cabeceraApp #listo{min-width:90px}#borradorTurno{margin:0}}
 </style>
 </head>
 <body>
+<div id="fondoMenu" hidden></div>
+<aside id="menuApp" role="dialog" aria-modal="true" aria-label="Navegación" hidden><button class="sec" id="cerrarMenu">Cerrar menú</button><nav id="seccionesMenu" aria-label="Secciones y subsecciones"></nav></aside>
 <div class="wrap">
-  <header>
+  <header id="cabeceraApp">
+    <button class="sec" id="abrirMenu" aria-label="Abrir navegación" aria-expanded="false" aria-controls="menuApp">☰ Menú</button>
     <div><div class="eyebrow">Proyecto Gran Torre</div><h1>Mesa de Shalock</h1></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="listo" style="width:auto;min-height:44px;padding:6px 14px">Listo</button><button class="sec" id="abrirDeclaracion">Escribir al DM</button><button class="sec" id="abrirHoja" hidden>Hoja</button><button class="sec" id="abrirForja">Forja</button><button class="sec" id="abrirAjustes">Conexión</button></div>
   </header>
+  <details id="borradorTurno" class="panel"><summary id="tituloBorrador">Turno por enviar</summary><ol id="partesTurno"></ol><div id="estadoEnvioGeneral" role="status"></div></details>
 
   <div class="hoja-pj" id="hoja" hidden role="dialog" aria-modal="true" aria-label="Hoja de personaje">
     <div class="hp-barra"><span class="eyebrow">Hoja de personaje</span><button class="sec" id="estiloHoja">Estilo</button><button class="sec" id="cerrarHoja">Cerrar</button></div>
@@ -377,7 +395,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
         <section class="panel">
           <label for="fjEstetica">Aspecto (cómo se ve, materiales, detalles)<textarea id="fjEstetica" rows="3"></textarea></label>
           <label for="fjNota">Nota para el DM (para qué es: premio del torneo, compra…)<textarea id="fjNota" rows="2"></textarea></label>
-          <button type="button" id="fjEncargar" disabled>Encargar al DM</button>
+          <button type="button" id="fjEncargar" disabled>Añadir encargo al turno</button>
           <div class="estado" id="fjEstado"></div>
           <div class="fj-fuente">El precio lo recalcula la herramienta del DM al llegar el encargo; si difiere, manda ese. La descripción final la escribe el DM.</div>
         </section>
@@ -401,7 +419,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
     <div class="estado" id="porQuePedido" hidden></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
-    <button id="tirar" disabled>Tirar y enviar al DM</button>
+    <button id="tirar" disabled>Tirar y añadir al turno</button>
     <div class="estado" id="estado"></div>
   </section>
     <section class="panel urgente" id="panelReaccion" hidden>
@@ -419,12 +437,12 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <div id="opcDano" hidden>
         <div class="opciones"><label id="lblCastigoDano"><input type="checkbox" id="castigoDano"> Castigo divino (2d8 radiante)</label></div>
         <label for="espCastigo">Espacio para el castigo<select id="espCastigo"></select></label>
-        <button id="tirarDano">Tirar daño y enviar</button>
+        <button id="tirarDano">Añadir decisión de daño al turno</button>
       </div>
       <div class="estado" id="resDano"></div>
       <div class="estado" id="estadoDano"></div>
       <div id="cfgSiguienteImpacto" hidden></div>
-      <button class="sec" id="cerrarDano" hidden>Listo</button>
+      <button class="sec" id="cerrarDano" hidden>Cerrar resultado</button>
     </section>
   </div>
 
@@ -432,7 +450,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <button data-tab="mesa">Mesa</button><button data-tab="mapa">Mapa</button><button data-tab="turno">Mi turno</button><button data-tab="shalock">Shalock</button><button data-tab="equipo">Equipo</button><button data-tab="registro">Registro</button>
   </nav>
 
-  <section class="panel pane" data-pane="mesa" aria-live="polite">
+  <section id="panelMesa" class="panel pane" data-pane="mesa" aria-live="polite">
     <div class="eyebrow">Lo que dice el DM</div>
     <p id="mensaje">Conectando…</p>
 
@@ -446,7 +464,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <label for="mensajeDM">Mensaje para el DM <span class="estado">Siempre disponible, con o sin actividades.</span></label>
       <textarea id="mensajeDM" maxlength="12000" placeholder="Lo que dices, haces, preguntas o quieres aclarar…"></textarea>
       <p class="estado">En combate, arma tus acciones en «Mi turno»; aquí puedes añadir diálogo e intenciones. «Listo» avisa al DM cuando quieras su respuesta.</p>
-      <button id="enviarDeclaracion">Listo · enviar al DM</button>
+      <button id="enviarDeclaracion">Añadir mensaje al turno</button>
       <div class="estado" id="estadoDeclaracion" role="status"></div>
     </div>
     <div class="sub" id="panelSubida" hidden></div>
@@ -459,7 +477,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="sub" id="equipoPendientes" hidden>
       <div class="eyebrow">Cambios sin confirmar</div>
       <ul class="eq-cambios" id="equipoCambios"></ul>
-      <button id="equipoConfirmar">Confirmar cambios</button>
+      <button id="equipoConfirmar">Añadir cambios al turno</button>
       <button class="sec" id="equipoDescartar">Descartar</button>
     </div>
     <div class="estado" id="equipoEstado"></div>
@@ -488,18 +506,18 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <option value="juntar_lena">Juntar leña (si el camino pasa por terreno con madera)</option></select></label>
     <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ver qué cuesta llegar.</div>
     <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
-    <button id="irPiso" disabled>Confirmar la marcha</button>
-    <button class="sec" id="soloTextoPiso">Enviar solo el texto</button>
+    <button id="irPiso" disabled>Añadir traslado al turno</button>
+    <button class="sec" id="soloTextoPiso">Añadir texto al turno</button>
     <div class="eyebrow" style="margin-top:14px">Buscar donde están</div>
     <label for="horasBuscar">Cuánto tiempo<select id="horasBuscar"><option value="1">Una hora</option><option value="2">Dos horas</option><option value="4">Cuatro horas</option></select></label>
     <div class="estado" id="infoBuscar"></div>
-    <button class="sec" id="buscarPiso">Confirmar la búsqueda</button>
+    <button class="sec" id="buscarPiso">Añadir búsqueda al turno</button>
     <div class="eyebrow" style="margin-top:14px">Descansar</div>
     <div class="estado" id="infoDescanso"></div>
     <div id="dadosDescanso"></div>
     <label class="check"><input type="checkbox" id="fogataDescanso"> Encender una fogata (gasta leña para una noche)</label>
-    <button class="sec" id="descansoCorto">Confirmar descanso corto (1 hora)</button>
-    <button class="sec" id="descansoLargo">Confirmar descanso largo (8 horas)</button>
+    <button class="sec" id="descansoCorto">Añadir descanso corto</button>
+    <button class="sec" id="descansoLargo">Añadir descanso largo</button>
     <div class="estado" id="estadoPiso"></div>
   </section>
 
@@ -531,8 +549,8 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="avisos"></div>
     <div class="estado" id="resTurno"></div>
     <div class="estado">«Enviar y seguir» manda lo armado y deja tu turno abierto: ves el resultado y armas lo que falta.</div>
-    <button class="sec" id="enviarParcial">Enviar y seguir</button>
-    <button id="enviarTurno">Enviar y terminar turno</button>
+    <button class="sec" id="enviarParcial">Añadir esta parte (turno abierto)</button>
+    <button id="enviarTurno">Añadir acciones al turno</button>
     <div class="estado" id="estadoTurno"></div>
   </section>
 
@@ -589,8 +607,8 @@ function pintar(e){
     // Por qué (ventaja de la escena que puso el DM, condiciones); si se anulan, también se dice.
     const pq=(pedido.por_que||[]).join(" · ");
     $("porQuePedido").hidden=!pq;$("porQuePedido").textContent=pq+(pq&&!pedido.modo?" → se anulan":"");
-    $("tirar").disabled=enviados.has(pedido.id);
-    if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y enviar al DM";
+    $("tirar").disabled=!!pedido.automatica||enviados.has(pedido.id);
+    if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y añadir al turno";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
   $("panelPedido").hidden=!pedido;
@@ -648,7 +666,7 @@ function salpicar(papel){papel.querySelectorAll(".gota").forEach(g=>g.remove());
       g.style.cssText=`width:${tam.toFixed(1)}px;height:${(tam*(principal&&g.className.includes("corrida")?1.8:0.85+r()*0.3)).toFixed(1)}px;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;transform:rotate(${Math.round(r()*360)}deg);box-shadow:${sal}`;
       el.appendChild(g)}})}
 $("estiloHoja").addEventListener("click",()=>{$("panelEstiloHoja").hidden=!$("panelEstiloHoja").hidden});
-$("abrirHoja").addEventListener("click",()=>{$("hoja").hidden=false;document.body.style.overflow="hidden";pintarHoja()});
+$("abrirHoja").addEventListener("click",()=>cambiarVista("personaje","hoja"));
 $("cerrarHoja").addEventListener("click",()=>{$("hoja").hidden=true;document.body.style.overflow=""});
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("hoja").hidden&&!document.querySelector(".hoja-fondo,.desplegable"))$("cerrarHoja").click()});
 const pips=(q,m,cls="")=>`<span class="hp-pips ${cls}">${Array.from({length:m},(_,i)=>`<i class="${i<q?"lleno":""}"></i>`).join("")}</span>`;
@@ -851,7 +869,7 @@ $("equipoDescartar").addEventListener("click",()=>{equipoCambios=[];$("equipoEst
 $("equipoConfirmar").addEventListener("click",async()=>{
   if(!equipoCambios.length)return;const b=$("equipoConfirmar");b.disabled=true;
   try{await enviarExploracion({tipo:"equipo",cambios:equipoCambios,ts:Date.now()});
-    equipoCambios=[];$("equipoEstado").textContent="Enviado: se aplica y la lista se actualiza sola en unos segundos.";pintarEquipo()}
+    equipoCambios=[];$("equipoEstado").textContent="Cambios añadidos al turno. Pulsa Listo arriba para aplicarlos.";pintarEquipo()}
   catch(e){$("equipoEstado").textContent=`No se pudo enviar (${e.message}).`}
   finally{b.disabled=false}});
 
@@ -920,7 +938,7 @@ function cargarDeclaracion(){
   $("estadoDeclaracion").textContent=salidaDeclaracion?"Hay un envío pendiente: pulsa Listo para reenviar el mismo mensaje.":"";
 }
 function catalogoActividad(id){return ACTIVIDADES_APP.categorias.find(x=>x.id===id)}
-function guardarBorrador(){try{guardarDeclaracion()}catch(e){$("estadoDeclaracion").textContent="No se pudo guardar el borrador en este dispositivo."}}
+function guardarBorrador(){try{guardarDeclaracion();pintarBorradorTurno()}catch(e){$("estadoDeclaracion").textContent="No se pudo guardar el borrador en este dispositivo."}}
 function pintarActividades(){
   const opciones=$("actividadesOpciones"),detalles=$("actividadesDetalles");opciones.replaceChildren();detalles.replaceChildren();
   for(const c of ACTIVIDADES_APP.categorias){
@@ -940,7 +958,7 @@ function pintarActividades(){
     const label=document.createElement("label");label.textContent=c.ayuda;const campo=document.createElement("textarea");campo.maxLength=6000;campo.value=a.detalle;campo.disabled=!!salidaDeclaracion;campo.setAttribute("aria-label",c.nombre);
     campo.oninput=()=>{a.detalle=campo.value;guardarBorrador()};label.appendChild(campo);bloque.append(cab,label);detalles.appendChild(bloque);
   });
-  $("mensajeDM").disabled=!!salidaDeclaracion;$("enviarDeclaracion").textContent=salidaDeclaracion?"Reenviar el mismo mensaje":"Listo · enviar al DM";
+  $("mensajeDM").disabled=!!salidaDeclaracion;$("enviarDeclaracion").textContent="Mensaje incluido en el próximo Listo";
 }
 function notaCompatible(id,datos){
   const lineas=[`Turno de la app: ${id}`,"Intenciones del jugador, en orden:"];
@@ -992,7 +1010,9 @@ function pintarRelato(){
   for(const x of esperasDM)if(!mostradas.has(x.id))agregar("Tú · esperando al DM",textoEntrada(x),x.ts);
   if(alFinal)box.scrollTop=box.scrollHeight;
 }
+let ultimoSondeoRelato=0;
 async function sondearRelato(){
+  if(Date.now()-ultimoSondeoRelato<2000)return;ultimoSondeoRelato=Date.now();
   if(leyendoRelato||!cfg.repo||!cfg.token)return;leyendoRelato=true;const repo=cfg.repo;
   try{
     const r=await fetch(`${API}/repos/${repo}/contents/relato.json`,{headers:cabeceras(etagRelato?{"If-None-Match":etagRelato}:{}),cache:"no-store"});
@@ -1004,16 +1024,15 @@ async function sondearRelato(){
   finally{leyendoRelato=false}
 }
 $("mensajeDM").addEventListener("input",()=>{declaracion.mensaje=$("mensajeDM").value;guardarBorrador()});
-$("mensajeDM").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();enviarDeclaracion()}});
-$("abrirDeclaracion").addEventListener("click",()=>{elegirPestana("mesa");$("declaracion").scrollIntoView({block:"start"});$("mensajeDM").focus()});
-$("enviarDeclaracion").addEventListener("click",enviarDeclaracion);
-$("listo").addEventListener("click",enviarDeclaracion);
+$("mensajeDM").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();enviarTodo()}});
+$("abrirDeclaracion").addEventListener("click",()=>{cambiarVista("mesa","declaracion");$("declaracion").scrollIntoView({block:"start"});$("mensajeDM").focus()});
+$("enviarDeclaracion").addEventListener("click",()=>{guardarBorrador();$("estadoDeclaracion").textContent="Mensaje preparado. Envíalo con Listo arriba.";pintarBorradorTurno()});
+$("listo").addEventListener("click",enviarTodo);
 // ---- Fin de intenciones de campaña ----
 
 async function enviarExploracion(t){
   const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
-  const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"exploración de Shalock",content:b64(JSON.stringify(t))})});
-  if(!r.ok)throw new Error("HTTP "+r.status);
+  return agregarParteTurno(id,t,"exploración y equipo");
 }
 $("irPiso").addEventListener("click",async()=>{
   if(!piso||!selPiso)return;
@@ -1104,7 +1123,7 @@ function abrirMulti(titulo,de,cantidad,actuales,listo){
   const panel=abrirPanel(),hoja=panel.hoja,cerrar=panel.cerrar;
   const tit=document.createElement("div");tit.className="eyebrow";hoja.appendChild(tit);
   const botones=de.map(x=>{const b=document.createElement("button");b.type="button";b.textContent=x;b.onclick=()=>{marcados.has(x)?marcados.delete(x):marcados.size<cantidad&&marcados.add(x);refrescar()};hoja.appendChild(b);return b});
-  const ok=document.createElement("button");ok.type="button";ok.textContent="Listo";ok.onclick=()=>{cerrar();listo([...marcados])};hoja.appendChild(ok);
+  const ok=document.createElement("button");ok.type="button";ok.textContent="Aceptar selección";ok.onclick=()=>{cerrar();listo([...marcados])};hoja.appendChild(ok);
   const c=document.createElement("button");c.type="button";c.className="sec";c.textContent="Cancelar";c.onclick=()=>cerrar();hoja.appendChild(c);
   function refrescar(){tit.textContent=`${titulo}: ${marcados.size} de ${cantidad}`;botones.forEach(b=>b.className=marcados.has(b.textContent)?"actual":"");ok.disabled=marcados.size!==cantidad}
   refrescar();panel.mostrar();
@@ -1153,37 +1172,69 @@ function pintarSubida(sv){
   const env=$("subEnviar");if(env)env.onclick=async()=>{
     if(!envioSubida){const ts=Date.now();envioSubida={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"subida",clase:cl.clase,pg_dado:sub.pg.valor,pg_modo:sub.pg.modo,pg_dados:sub.pg.dados,elecciones:sub.elec,ts}}}
     const est=$("subEstado");est.className="estado";est.textContent="Enviando…";env.disabled=true;
-    try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioSubida.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"subida de nivel",content:b64(JSON.stringify(envioSubida.t))})});
-      if(!r.ok)throw new Error("HTTP "+r.status);envioSubida=null;sub={clase:null,pg:null,elec:{}};est.className="estado ok";est.textContent="Subida enviada: el DM la aplica."}
+    try{await agregarParteTurno(envioSubida.id,envioSubida.t,"subida de nivel");envioSubida=null;sub={clase:null,pg:null,elec:{}};est.className="estado ok";est.textContent="Subida añadida al turno. Pulsa Listo arriba."}
     catch(e){env.disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía la misma.`}};
 }
 
-// ---- Pestañas ----
-// Con combate: Mesa, Mapa, Mi turno, Shalock, Registro. En el celular el mapa también se ve en «Mi turno»
-// (para marcar el movimiento sin cambiar de pestaña); en el PC queda fijo a la izquierda.
-let pestana="mesa",turnoVisto=null;
-try{pestana=localStorage.getItem("mesa_pestana")||"mesa"}catch(e){}
+// ---- Navegación por vistas y subsecciones ----
+let reaccionVista=null;
+let pestana="mesa",turnoVisto=null,vistaApp={seccion:"mesa",sub:"relato"},navegacionArmada=false,focoAntesMenu=null;
 const esPC=()=>matchMedia("(min-width:1000px)").matches;
-function elegirPestana(nombre){
-  pestana=nombre;try{localStorage.setItem("mesa_pestana",nombre)}catch(e){}
-  const pc=esPC(), efectiva=pc&&nombre==="mapa"?"turno":nombre;
-  document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("activa",b.dataset.tab===efectiva));
-  document.querySelectorAll(".pane").forEach(s=>s.classList.toggle("activa",s.dataset.pane===efectiva));
-  // El mapa vive en «Mapa»; en el celular, con «Mi turno» abierto, se muda arriba del armado.
-  const destino=!pc&&efectiva==="turno"?$("mapaEnTurno"):$("hogarMapa");
-  if($("panelMapa").parentElement!==destino){destino.appendChild($("panelMapa"));if(typeof centrarMapa==="function")requestAnimationFrame(centrarMapa)}
+const VISTAS_APP=[
+ {id:"mesa",nombre:"Mesa",subs:[["relato","Narración",["historiaVista"]],["declaracion","Escribir turno",["declaracion"]]]},
+ {id:"exploracion",nombre:"Exploración",subs:[["mapa","Mapa y lugares",["mapaExploracionVista"]],["viaje","Traslado",["viajeVista"]],["buscar","Investigación",["buscarVista"]],["descanso","Descanso",["descansoVista"]],["carga","Carga y provisiones",["cargaPiso","provPiso"]]]},
+ {id:"combate",nombre:"Combate",subs:[["mapa","Mapa",["mapaCombateVista"]],["combatientes","Combatientes",["combatientes"]],["acciones","Mis acciones",["panelTurno"]],["reaccion","Reacciones",["panelReaccion"]],["resultados","Ataques y resultados",["panelDano","salvacionesAutoVista"]],["interruptores","Interruptores",["panelConm"]]]},
+ {id:"personaje",nombre:"Personaje",subs:[["hoja","Hoja",["hoja"]],["recursos","Recursos",["panelShalock"]],["subida","Subida de nivel",["panelSubida"]]]},
+ {id:"equipo",nombre:"Equipo",subs:[["inventario","Inventario",["equipoInventarioVista"]],["cambios","Cambios pendientes",["equipoPendientes"]]]},
+ {id:"forja",nombre:"Forja",subs:[["diseno","Objeto y taller",["forjaDisenoVista"]],["propiedades","Propiedades y mejoras",["fjSecPedido","fjSecHerrero","fjSecMagia"]],["encargo","Aspecto y encargo",["forjaEncargoVista"]]]},
+ {id:"registro",nombre:"Registro",subs:[["registro","Historial de combate",["panelRegistro"]],["tiradas","Tirada solicitada",["panelPedido"]]]},
+ {id:"conexion",nombre:"Conexión",subs:[["ajustes","Conexión",["ajustes"]]]}
+];
+function envolverDesdeHasta(desde,hasta,id){
+ if($(id))return;const p=desde.parentNode,c=document.createElement("div");c.id=id;p.insertBefore(c,desde);
+ let n=desde;while(n){const siguiente=n.nextSibling;c.appendChild(n);if(n===hasta)break;n=siguiente}
 }
-function pestanas(cb){
-  const wrap=document.querySelector(".wrap");
-  wrap.classList.toggle("con-pestanas",!!cb); $("tabs").hidden=!cb;
-  if(!cb){document.querySelectorAll(".pane").forEach(s=>s.classList.remove("activa"));return}
-  // Al empezar tu turno se abre «Mi turno».
-  if(cb.turno==="Shalock"&&turnoVisto!=="Shalock")pestana="turno";
-  turnoVisto=cb.turno;
-  elegirPestana(pestana);
+function armarNavegacion(){
+ if(navegacionArmada)return;navegacionArmada=true;
+ envolverDesdeHasta($("fjTaller"),$("fjTaller").nextElementSibling,"forjaDisenoVista");
+ envolverDesdeHasta($("fjEncargar").parentElement,$("fjEncargar").parentElement,"forjaEncargoVista");
+ envolverDesdeHasta($("equipoAviso").previousElementSibling,$("equipoLista"),"equipoInventarioVista");
+ envolverDesdeHasta($("orden"),$("hogarMapa"),"mapaCombateVista");
+ envolverDesdeHasta($("mensaje").previousElementSibling,$("estadoRelato"),"historiaVista");
+ envolverDesdeHasta($("horasBuscar").parentElement.previousElementSibling,$("buscarPiso"),"buscarVista");
+ envolverDesdeHasta($("infoDescanso").previousElementSibling,$("descansoLargo"),"descansoVista");
+ envolverDesdeHasta($("preguntaForzada"),$("soloTextoPiso"),"viajeVista");
+ envolverDesdeHasta($("tituloPiso"),$("lugaresPiso"),"mapaExploracionVista");
+ $("panelPiso").insertBefore($("provPiso"),$("cargaPiso"));
+ const auto=document.createElement("section");auto.id="salvacionesAutoVista";auto.className="panel";$("arriba").appendChild(auto);
+ try{const x=JSON.parse(localStorage.getItem("mesa_vista_app")||"null");if(x)vistaApp=x}catch(e){}
+ $("abrirMenu").onclick=()=>abrirMenuApp();$("cerrarMenu").onclick=cerrarMenuApp;$("fondoMenu").onclick=cerrarMenuApp;
+ document.addEventListener("keydown",e=>{if($("menuApp").hidden)return;if(e.key==="Escape"){e.preventDefault();cerrarMenuApp()}
+  if(e.key==="Tab"){const bs=[...$("menuApp").querySelectorAll("button:not(:disabled)")],primero=bs[0],ultimo=bs[bs.length-1];if(e.shiftKey&&document.activeElement===primero){e.preventDefault();ultimo.focus()}else if(!e.shiftKey&&document.activeElement===ultimo){e.preventDefault();primero.focus()}}});
+ cambiarVista(vistaApp.seccion,vistaApp.sub,false);
 }
-document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>elegirPestana(b.dataset.tab)));
-matchMedia("(min-width:1000px)").addEventListener("change",()=>{if(combate)elegirPestana(pestana)});
+function abrirMenuApp(){focoAntesMenu=document.activeElement;$("menuApp").hidden=false;$("fondoMenu").hidden=false;$("abrirMenu").setAttribute("aria-expanded","true");$("cerrarMenu").focus()}
+function cerrarMenuApp(){$("menuApp").hidden=true;$("fondoMenu").hidden=true;$("abrirMenu").setAttribute("aria-expanded","false");focoAntesMenu?.focus()}
+function cambiarVista(seccion,sub,volverArriba=true){
+ const v=VISTAS_APP.find(x=>x.id===seccion)||VISTAS_APP[0],sv=v.subs.find(x=>x[0]===sub)||v.subs[0];vistaApp={seccion:v.id,sub:sv[0]};pestana=v.id;$("abrirMenu").textContent="☰ "+v.nombre;
+ try{localStorage.setItem("mesa_vista_app",JSON.stringify(vistaApp))}catch(e){}
+ const actuales=new Set(sv[2]),raices=["panelMesa","panelPiso","panelCombate","panelTurno","panelConm","panelShalock","panelEquipo","panelRegistro","panelPedido","panelReaccion","panelDano","forja","hoja","ajustes","salvacionesAutoVista"];
+ const mostrar=new Set(actuales);if(v.id==="mesa"||sv[0]==="subida")mostrar.add("panelMesa");if(v.id==="exploracion")mostrar.add("panelPiso");if(v.id==="forja")mostrar.add("forja");if(v.id==="equipo")mostrar.add("panelEquipo");if(v.id==="combate"&&["mapa","combatientes"].includes(sv[0]))mostrar.add("panelCombate");
+ for(const id of raices)$(id)?.classList.toggle("vista-oculta",!mostrar.has(id));
+ for(const id of ["mapaCombateVista","combatientes","forjaDisenoVista","forjaEncargoVista","fjSecPedido","fjSecHerrero","fjSecMagia","equipoInventarioVista","equipoPendientes","historiaVista","declaracion","panelSubida","mapaExploracionVista","viajeVista","buscarVista","descansoVista","cargaPiso","provPiso"])$(id)?.classList.toggle("subvista-oculta",!actuales.has(id));
+ if(actuales.has("hoja")){$("hoja").hidden=false;if(hojaPJ)pintarHoja()}
+ if(v.id==="forja"){$("forja").hidden=false;if(forjaCat)armarForja();else cargarForja()}
+ if(actuales.has("ajustes"))$("ajustes").hidden=false;
+ const m=$("seccionesMenu");m.replaceChildren();for(const x of VISTAS_APP){const b=document.createElement("button");b.className="sec";b.textContent=x.nombre;b.setAttribute("aria-current",x.id===v.id?"page":"false");b.onclick=()=>cambiarVista(x.id,x.subs[0][0]);m.appendChild(b);
+  if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q)}m.appendChild(grupo)}}
+ if(volverArriba)window.scrollTo({top:0,behavior:"instant"});
+}
+function elegirPestana(nombre){const x={mesa:["mesa","relato"],turno:["combate","acciones"],mapa:["combate","mapa"],equipo:["equipo","inventario"],shalock:["personaje","recursos"],registro:["registro","registro"]}[nombre]||[nombre,null];cambiarVista(...x)}
+function pestanas(cb){document.querySelector(".wrap").classList.remove("con-pestanas");$("tabs").hidden=true;armarNavegacion();turnoVisto=cb?.turno||null;
+ const rp=cb?.reaccion_pendiente,rf=rp?JSON.stringify(rp):null;if(rf&&rf!==reaccionVista)cambiarVista("combate","reaccion");reaccionVista=rf;
+ const rs=cb?.shalock?.salvaciones_automaticas||[];$("salvacionesAutoVista").innerHTML='<div class="eyebrow">Salvaciones automáticas</div>'+rs.map(r=>`<p>${esc(r.concentracion?"Concentración":"Salvación "+r.car)}: ${r.total} · ${r.exito?"éxito":"fallo"}</p>`).join("");
+}
+
 
 // ---- Listas en lugar de <select> ----
 // Cada <select> queda oculto y un botón despliega sus opciones debajo (abrirPanel); elegir cambia el select y avisa
@@ -1809,6 +1860,22 @@ function describir(p,valor){
   return x;
 }
 
+function prepararDanoJunto(atq){
+ const a=ataque(atq.id),normales=[Object.assign(tirarExpr(a.dano,false,a.gwf),{tipo:a.tipo_dano})];
+ for(const x of atq.efectos?.extras||[]){if(x.solo_arma_cc&&a.clase!=="arma"||x.solo_cc&&!(a.etiquetas||[]).some(t=>/_cc$/.test(t)))continue;
+  const tipo=`${x.tipo==="del_arma"?a.tipo_dano:x.tipo} (${x.nombre})`;
+  normales.push(x.dados?Object.assign(tirarExpr(x.dados,false,a.gwf),{tipo,fuente:x.fuente}):{expresion:"+"+(x.valor==="competencia"?combate.shalock.competencia:Number(x.valor)||0),dados:[],total:x.valor==="competencia"?combate.shalock.competencia:Number(x.valor)||0,tipo,fuente:x.fuente})}
+ const extra=normales.map(x=>{const m=/^(\d+)d(\d+)/.exec(x.expresion);return m?tirarExpr(`${m[1]}d${m[2]}`,false,a.gwf):{dados:[],total:0}});
+ return {danos:normales,dados_criticos:extra,decision_dano:!!opcionalImpacto(a)};
+}
+function prepararImpactosJuntos(ac,previa){
+ const objetivos=ac.objetivos_impactos||[ac.objetivo];
+ const entradas=objetivos.map((obj,i)=>{const atq=i?ataqueElegido(ac.id,obj,ac.ajustes_impactos?.[i]||{},previa):{...ac};
+  if(atq.d20.length===1)atq.d20.push(d(20)); // reserva para un cambio de ventaja entre impactos, sin volver a tirar
+  return {ataque:atq,...prepararDanoJunto(atq)};});
+ ac.impactos_tirados=entradas;
+}
+function danosGuardados(entrada,critico){return entrada.danos.map((x,i)=>{const e=critico?entrada.dados_criticos[i]:null;return {...x,dados:[...(x.dados||[]),...(e?.dados||[])],total:x.total+(e?.total||0)}})}
 function tirarTurno(){
   const s=combate.shalock, ad=idxDe("adicional")>=0?describir("ad",form.adicional):null, ac=idxDe("accion")>=0?describir("ac",form.accion):null;
   form.orden=ordenAdicional();
@@ -1818,6 +1885,7 @@ function tirarTurno(){
   const previa=oa&&oa.al_impactar_si_lanza&&form.orden==="antes"?{datos:oa.al_impactar_si_lanza,objetivo:ad.objetivo,nivel:ad.nivel||1}:null;
   if(ac&&ac.tipo==="ataque"){
     Object.assign(ac,ataqueElegido(ac.id,ac.objetivos_impactos[0],ac.ajustes_impactos[0],previa));
+    prepararImpactosJuntos(ac,previa);
   }
   // Prueba propia (enfrentada) y curación con dados: según el dato de la opción, escalada por nivel de espacio.
   if(ac&&ac.habilidad){const m=(s.habilidades||{})[ac.habilidad]||0;ac.tirada=tirarExpr(`1d20${m>=0?"+":""}${m}`,false,false)}
@@ -1854,6 +1922,16 @@ function guardarEnCurso(){try{localStorage.setItem("mesa_en_curso",JSON.stringif
 // Paso 2: con el veredicto, el daño (y el Castigo divino, que se decide al impactar).
 function pintarDano(){
   const p=$("panelDano"); if(!combate||!enCurso){p.hidden=true;return}
+  const lote=combate.shalock.lote_ataque;
+  if(lote&&enCurso.impactos_tirados&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote)){
+    p.hidden=false;$("veredicto").textContent=(lote.resultados||[]).map(r=>`Impacto ${r.indice+1} contra ${r.objetivo}: ${r.critico?"crítico":r.impacta?"impacta":"falla"}`).join(" · ");
+    $("opcDano").hidden=true;$("cerrarDano").hidden=true;$("cfgSiguienteImpacto").hidden=true;
+    $("estadoDano").textContent=lote.terminado?"Acción resuelta.":lote.pausa||combate.pausa||"Resolviendo los ataques ya tirados…";
+    if(lote.terminado){enCurso=null;guardarEnCurso();return}
+    if(!lote.pausa)return;
+    const entradas=enCurso.impactos_tirados,entrada=entradas[lote.indice];
+    if(entrada&&lote.fase==="veredicto")enCurso={...enCurso,...entrada.ataque,tirada:lote.ref,raiz_lote:lote.raiz,indice_impacto:lote.indice,impactos_tirados:entradas};
+  }
   const v=combate.resolucion&&combate.resolucion.tirada===enCurso.tirada?combate.resolucion:null;
   p.hidden=false;
   $("cerrarDano").hidden=true;
@@ -1876,7 +1954,45 @@ function pintarDano(){
 const opcionalImpacto=a=>a&&a.clase==="arma"?((combate.shalock.al_impactar||{}).opcionales||[]).find(o=>o.coste==="espacio"):null;
 function dadosOpcional(op,nivel){const m=/^(\d+)d(\d+)$/.exec(op.dados),q=/^(\d+)d/.exec(op.por_nivel||"0d");
   const n=Math.min(op.max_dados||99,Number(m[1])+Number(q[1])*(nivel-1));return`${n}d${m[2]}`}
-async function subirTirada(id,t,mensaje){
+// ---- Borrador común: ninguna parte se transmite hasta el Listo superior ----
+let partesTurno=[],enviandoTodo=false;
+const clavePartes=()=>"mesa_partes_turno_"+cfg.repo;
+function cargarPartesTurno(){try{partesTurno=JSON.parse(localStorage.getItem(clavePartes())||"[]")}catch(e){partesTurno=[]}pintarBorradorTurno()}
+function guardarPartesTurno(){localStorage.setItem(clavePartes(),JSON.stringify(partesTurno));pintarBorradorTurno()}
+function etiquetaParte(t){return t.tipo==="turno"?"Acciones de combate":t.tipo==="exploracion"?"Exploración: "+t.accion:t.tipo==="equipo"?"Cambios de equipo":t.tipo==="forja"?"Encargo: "+(t.nombre||""):t.tipo==="reaccion"?"Reacción: "+(t.opcion?.id||t.ataque?.accion||"dejar pasar"):t.tipo==="dano"?"Daño: "+t.accion:t.pedido?"Tirada: "+t.nombre:t.tipo||"Acción"}
+function pintarBorradorTurno(){
+ if(!$("partesTurno"))return;const cuenta=partesTurno.length+(typeof declaracion!=="undefined"&&(declaracion.mensaje||declaracion.actividades.length)?1:0);$("tituloBorrador").textContent=`Turno por enviar · ${cuenta} ${cuenta===1?"parte":"partes"}`;
+ $("partesTurno").replaceChildren();
+ if(typeof declaracion!=="undefined"&&(declaracion.mensaje||declaracion.actividades.length)){const li=document.createElement("li");li.textContent="Mensaje e intenciones: "+(declaracion.actividades.map(x=>catalogoActividad(x.id)?.nombre||x.id).join(" · "))+(declaracion.mensaje?" — "+declaracion.mensaje.slice(0,180):"");$("partesTurno").appendChild(li)}
+ partesTurno.forEach((p,i)=>{const li=document.createElement("li");li.textContent=etiquetaParte(p.t)+(p.subida?" · recibida":"");
+  const b=document.createElement("button");b.type="button";b.className="sec";b.textContent="Quitar";b.disabled=!!p.subida||enviandoTodo;b.onclick=()=>{partesTurno.splice(i,1);guardarPartesTurno()};li.appendChild(b);$("partesTurno").appendChild(li)});
+}
+async function agregarParteTurno(id,t,mensaje){
+ if(enviandoTodo)throw Error("Espera a que termine el envío actual");
+ if(t.tipo==="turno"&&partesTurno.some(x=>x.t.tipo==="turno"&&x.id!==id))throw Error("Ya hay acciones de combate preparadas. Revisa esa parte antes de añadir otro turno");
+ const viejo=partesTurno.find(x=>x.id===id);if(viejo){if(JSON.stringify(viejo.t)!==JSON.stringify(t))throw Error("La parte guardada tiene otro contenido");return}
+ partesTurno.push({id,t:JSON.parse(JSON.stringify(t)),mensaje,subida:false});guardarPartesTurno();
+ $("estadoEnvioGeneral").textContent="Parte añadida al borrador. Envíala con Listo arriba.";
+}
+async function enviarTodo(){
+ if(enviandoTodo)return;
+ if(!cfg.repo||!cfg.token){cambiarVista("conexion","ajustes");return}
+ // La acción que se está armando se incorpora aunque no se pulse su botón local.
+ if(typeof pasos!=="undefined"&&pasos.length&&!partesTurno.some(x=>x.t.tipo==="turno")){
+  if(!revisar()){cambiarVista("combate","acciones");return}await enviarTurno(false);
+ }
+ enviandoTodo=true;$("listo").disabled=true;
+ try{
+  for(const parte of partesTurno){if(parte.subida)continue;await escribirTirada(parte.id,parte.t,parte.mensaje);parte.subida=true;guardarPartesTurno()}
+  // El acuse Listo se publica después de todos los archivos de esta declaración.
+  $("listo").disabled=false;await enviarDeclaracion();
+  if(salidaDeclaracion)throw Error("Queda pendiente el aviso al DM");
+  partesTurno=[];guardarPartesTurno();$("estadoEnvioGeneral").textContent="Turno enviado. La respuesta aparecerá en Mesa.";
+ }catch(e){$("estadoEnvioGeneral").textContent=`Envío pendiente (${e.message}). Listo reintenta los mismos paquetes, sin volver a tirar.`}
+ finally{enviandoTodo=false;$("listo").disabled=false;pintarBorradorTurno()}
+}
+async function subirTirada(id,t,mensaje){return agregarParteTurno(id,t,mensaje)}
+async function escribirTirada(id,t,mensaje){
   const url=`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`;
   const r=await fetch(url,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:mensaje,content:b64(JSON.stringify(t))})});
   if(r.ok)return;
@@ -1887,9 +2003,41 @@ async function subirTirada(id,t,mensaje){
   }
   throw new Error("HTTP "+r.status);
 }
+let automaticosOcupados=false;
+async function avanzarAutomaticos(){
+ if(automaticosOcupados||!cfg.repo||!cfg.token)return;automaticosOcupados=true;
+ try{
+  if(pedido?.automatica&&pedido.tipo==="salvacion"&&!enviados.has(pedido.id)&&!combate?.reaccion_pendiente&&!combate?.pausa){
+    const clave="mesa_salvacion_auto_"+cfg.repo+"_"+pedido.id;let envio=JSON.parse(localStorage.getItem(clave)||"null");
+    if(!envio){const m=/^(\d*)d(\d+)$/.exec(pedido.expresion||"1d20"),n=Number(m?.[1]||1),caras=Number(m?.[2]||20),mod=Number(pedido.mod)||0;
+      let ds=Array.from({length:n},()=>d(caras)),descartado=null;if(pedido.modo&&n===1&&caras===20){const otro=d(20),a=ds[0];ds=[pedido.modo==="ventaja"?Math.max(a,otro):Math.min(a,otro)];descartado=ds[0]===a?otro:a}
+      const ts=Date.now();envio={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"salvacion_auto",automatica:true,pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion,dados:ds,mod,total:ds.reduce((a,b)=>a+b,0)+mod,modo:pedido.modo,descartado,ts}};localStorage.setItem(clave,JSON.stringify(envio));
+    }
+    await escribirTirada(envio.id,envio.t,"salvación automática del jugador");marcarEnviado(pedido.id);$("estado").textContent=`Salvación automática: ${envio.t.total}. Resultado enviado al DM.`;$("tirar").disabled=true;
+  }
+  if(!combate||!enCurso?.impactos_tirados)return;
+  if(partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida))return;
+  const lote=combate.shalock.lote_ataque;
+  if(lote&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote))return;
+  const v=combate.resolucion?.tirada===enCurso.tirada?combate.resolucion:null,s=combate.shalock.serie_impactos,entrada=enCurso.impactos_tirados[enCurso.indice_impacto||0];
+  if(v?.impacta&&!enCurso.enviado&&!entrada.decision_dano){
+    if(!enCurso.danoAuto){const ts=Date.now();enCurso.danoAuto={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"dano",ref:enCurso.tirada,serie:s?.serie||null,indice_impacto:enCurso.indice_impacto||0,accion:enCurso.accion,objetivo:enCurso.objetivo,critico:!!v.critico,castigo:false,danos:danosGuardados(entrada,!!v.critico),ts}};guardarEnCurso()}
+    await escribirTirada(enCurso.danoAuto.id,enCurso.danoAuto.t,"daño automático del ataque declarado");enCurso.enviado=true;guardarEnCurso();return;
+  }
+  if(s?.terminada&&(enCurso.enviado||v&&!v.impacta)){enCurso=null;guardarEnCurso();return}
+  if(s?.espera==="siguiente"&&s.completados.length>(enCurso.indice_impacto||0)){
+    const i=s.completados.length,e=enCurso.impactos_tirados[i],bl=combate.combatientes.find(x=>x.id===e.ataque.objetivo),a=ataque(e.ataque.id);
+    if(bl&&(!bl.activo||a.alcance&&bl.distancia>a.alcance)){ $("estadoDano").textContent="El objetivo cambió. Elige otro para el impacto restante o renuncia a él.";return}
+    if(!enCurso.siguiente){const ts=Date.now();enCurso.siguiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"impacto",serie:s.serie,indice_impacto:i,ataque:e.ataque,ts}};guardarEnCurso()}
+    const envio=enCurso.siguiente,anterior=enCurso;await escribirTirada(envio.id,envio.t,"siguiente impacto ya tirado");
+    enCurso={...envio.t.ataque,tirada:envio.id+".json",serie:s.serie,indice_impacto:i,objetivos_impactos:anterior.objetivos_impactos,ajustes_impactos:anterior.ajustes_impactos,impactos_tirados:anterior.impactos_tirados};guardarEnCurso();
+  }
+ }catch(e){$("estadoEnvioGeneral").textContent=`Resolución automática pendiente (${e.message}); se reintentará con los mismos dados.`}
+ finally{automaticosOcupados=false}
+}
 function pintarSiguienteImpacto(){
   const cfg=$("cfgSiguienteImpacto"),b=$("cerrarDano"),s=combate.shalock.serie_impactos;
-  cfg.hidden=true;b.textContent="Listo";b.disabled=false;
+  cfg.hidden=true;b.textContent="Cerrar resultado";b.disabled=false;
   if(!s||!enCurso.objetivos_impactos||enCurso.objetivos_impactos.length<2)return;
   if(s.serie!==enCurso.tirada&&s.serie!==enCurso.serie)return;
   enCurso.serie=s.serie;guardarEnCurso();
@@ -1922,13 +2070,13 @@ async function continuarImpacto(){
     if(dd!=null&&a.alcance&&dd>a.alcance){$("estadoDano").textContent="Ese objetivo está fuera del alcance; elige otro.";return}
     if(a.requiere_ver&&bl?.lo_ves===false){$("estadoDano").textContent="Esta acción requiere ver al objetivo.";return}
     if(combate.mapa&&yo?.pos&&bl?.pos&&coberturaHex(combate.mapa.filas,yo.pos,bl.pos,combate.combatientes.filter(x=>x.activo&&x.pos&&!x.es_pj&&x.id!==obj).map(x=>x.pos))===null){$("estadoDano").textContent="No hay línea hasta ese objetivo.";return}
-    const atq=ataqueElegido(enCurso.id,obj,enCurso.ajustes_impactos?.[i]||{}),ts=Date.now();
+    const cache=enCurso.impactos_tirados?.[i]?.ataque,atq=cache?{...cache,objetivo:obj,efectos:impactosPara(obj,null)}:ataqueElegido(enCurso.id,obj,enCurso.ajustes_impactos?.[i]||{}),ts=Date.now();
     enCurso.siguiente={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"impacto",serie:s.serie,indice_impacto:i,ataque:atq,ts}};guardarEnCurso();
   }
   const envio=enCurso.siguiente;$("cerrarDano").disabled=true;
   try{
     await subirTirada(envio.id,envio.t,"impacto de Shalock");
-    const anterior=enCurso;enCurso=Object.assign({},envio.t.ataque,{tirada:envio.id+".json",serie:envio.t.serie,indice_impacto:envio.t.indice_impacto,objetivos_impactos:anterior.objetivos_impactos,ajustes_impactos:anterior.ajustes_impactos});
+    const anterior=enCurso;enCurso=Object.assign({},envio.t.ataque,{tirada:envio.id+".json",serie:envio.t.serie,indice_impacto:envio.t.indice_impacto,objetivos_impactos:anterior.objetivos_impactos,ajustes_impactos:anterior.ajustes_impactos,impactos_tirados:anterior.impactos_tirados,raiz_lote:anterior.raiz_lote});
     guardarEnCurso();$("estadoDano").textContent="";$("resDano").textContent="";pintarDano();
   }catch(e){$("estadoDano").textContent=`No se pudo enviar (${e.message}). Reintenta: se conserva la misma tirada.`;$("cerrarDano").disabled=false}
 }
@@ -1986,9 +2134,7 @@ function pintarReaccion(){
 }
 async function enviarReaccion(t){
   const ts=Date.now(),id=`${ts}-${Math.random().toString(36).slice(2,7)}`;
-  const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"reacción de Shalock",content:b64(JSON.stringify(t))})});
-  if(!r.ok)throw new Error("HTTP "+r.status);
-  return id;
+  await agregarParteTurno(id,t,"reacción de Shalock");return id;
 }
 $("atacarReaccion").addEventListener("click",async()=>{
   const s=combate.shalock, rp=combate.reaccion_pendiente;
@@ -2031,13 +2177,14 @@ async function enviarTurno(parcial){
   if(!envioTurno){if(!revisar())return;const ts=Date.now();envioTurno={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:Object.assign(tirarTurno(),{parcial})}}
   const t=envioTurno.t, est=$("estadoTurno");
   $("resTurno").textContent=resumen(t);
+  if(t.accion?.impactos_tirados)$("resTurno").textContent+="\n"+t.accion.impactos_tirados.map((x,i)=>`Impacto ${i+1}: ${x.ataque.objetivo} · d20 ${x.ataque.d20.join(" / ")} · total ${x.ataque.total}`).join("\n");
   est.className="estado";est.textContent="Enviando…";$("enviarTurno").disabled=true;
   try{
     await subirTirada(envioTurno.id,t,"turno de Shalock");
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
     envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false,adManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
-    $("enviarTurno").textContent="Enviar y terminar turno";
-    est.className="estado ok";est.textContent=t.parcial?"Parte enviada: tu turno sigue abierto.":"Turno enviado al DM.";
+    $("enviarTurno").textContent="Añadir acciones al turno";
+    est.className="estado ok";est.textContent=t.parcial?"Parte añadida; se enviará con Listo arriba.":"Acciones añadidas al turno. Pulsa Listo arriba.";
     pintarCombate(combate);
   }catch(e){
     $("enviarTurno").textContent="Reenviar el mismo turno";$("enviarTurno").disabled=false;
@@ -2047,27 +2194,31 @@ async function enviarTurno(parcial){
 $("enviarTurno").addEventListener("click",()=>enviarTurno(envioTurno?envioTurno.t.parcial:false));
 $("enviarParcial").addEventListener("click",()=>enviarTurno(envioTurno?envioTurno.t.parcial:true));
 
+let sondeandoEstado=false,ultimoSondeoEstado=0;
 async function sondear(){
-  if(!cfg.repo||!cfg.token)return;
+  if(!cfg.repo||!cfg.token||sondeandoEstado)return;
+  const intervalo=enCurso||pedido?.automatica||combate?.reaccion_pendiente?750:2000;
+  if(Date.now()-ultimoSondeoEstado<intervalo)return;ultimoSondeoEstado=Date.now();sondeandoEstado=true;
   sondearRelato();
   try{
     const h=cabeceras(etag?{"If-None-Match":etag}:{});
     const r=await fetch(`${API}/repos/${cfg.repo}/contents/estado.json`,{headers:h,cache:"no-store"});
-    if(r.status===304){$("conexion").textContent="Conectado";return}
+    if(r.status===304){$("conexion").textContent="Conectado";avanzarAutomaticos();return}
     if(r.status===401||r.status===403){$("conexion").textContent="El token no sirve o venció";return}
     if(r.status===404){$("conexion").textContent="Conectado; el DM aún no publica la mesa";$("mensaje").textContent="Esperando al DM…";return}
     if(!r.ok){$("conexion").textContent="Error "+r.status;return}
     etag=r.headers.get("ETag");
     const j=await r.json();
     pintar(JSON.parse(deB64(j.content)));
+    avanzarAutomaticos();
     $("conexion").textContent="Conectado";
-  }catch(e){$("conexion").textContent="Sin conexión"}
+  }catch(e){$("conexion").textContent="Sin conexión"}finally{sondeandoEstado=false}
 }
 
 function arrancar(){
-  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;cargarDeclaracion();
+  leerCfg();$("repo").value=cfg.repo;$("token").value=cfg.token;cargarDeclaracion();cargarPartesTurno();armarNavegacion();
   if(!cfg.repo||!cfg.token){$("ajustes").hidden=false;$("mensaje").textContent="Falta la conexión: pon el repositorio y el token.";return}
-  if(sondeo)clearInterval(sondeo);etag=null;cargarNombresMapa();sondear();sondeo=setInterval(sondear,2000);
+  if(sondeo)clearInterval(sondeo);etag=null;ultimoSondeoEstado=0;ultimoSondeoRelato=0;cargarNombresMapa();sondear();sondeo=setInterval(sondear,500);
 }
 
 $("abrirAjustes").addEventListener("click",()=>{$("ajustes").hidden=!$("ajustes").hidden});
@@ -2092,8 +2243,7 @@ $("tirar").addEventListener("click",async()=>{
   $("dado").textContent=dados.join(" · ")+(tirada.descartado!=null?` (y ${tirada.descartado})`:"");$("total").textContent=`${mod>=0?"+":"−"} ${Math.abs(mod)} = ${total}`;$("resultado").hidden=false;
   const est=$("estado");est.className="estado";est.textContent="Enviando…";
   try{
-    const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"tirada "+(pedido.nombre||""),content:b64(JSON.stringify(tirada))})});
-    if(!r.ok)throw new Error("HTTP "+r.status);
+    await agregarParteTurno(id,tirada,"tirada "+(pedido.nombre||""));
     marcarEnviado(pedido.id);pendiente=null;
     est.className="estado ok";est.textContent=`Enviada: ${dados.join(", ")} ${fmtMod(mod)} → ${total}`;
   }catch(e){
@@ -2391,10 +2541,9 @@ $("fjEncargar").onclick=async()=>{
     base:fj.base,base_pedida:fj.base?null:String(fj.base_pedida||"").trim(),consumible:fj.consumible,estetica:fj.estetica.trim(),nota:fj.nota.trim(),
     propiedades:fj.propiedades.map(p=>Object.assign({},p,p.texto!==undefined?{texto:String(p.texto).trim()}:{})),precio_app:calc.precio_po,rareza_app:calc.rareza,ts}}}
   est.className="estado";est.textContent="Enviando…";$("fjEncargar").disabled=true;
-  try{const r=await fetch(`${API}/repos/${cfg.repo}/contents/tiradas/${envioForja.id}.json`,{method:"PUT",headers:cabeceras({"Content-Type":"application/json"}),body:JSON.stringify({message:"encargo de forja",content:b64(JSON.stringify(envioForja.t))})});
-    if(!r.ok)throw new Error("HTTP "+r.status);envioForja=null;est.className="estado ok";est.textContent="Encargo enviado: el DM lo revisa y te responde en la mesa.";refrescarForja(false)}
+  try{await agregarParteTurno(envioForja.id,envioForja.t,"encargo de forja");envioForja=null;est.className="estado ok";est.textContent="Encargo añadido al turno. Pulsa Listo arriba.";refrescarForja(false)}
   catch(e){$("fjEncargar").disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo.`}};
-$("abrirForja").addEventListener("click",()=>{$("forja").hidden=false;document.body.style.overflow="hidden";if(forjaCat)armarForja();else cargarForja()});
+$("abrirForja").addEventListener("click",()=>cambiarVista("forja","diseno"));
 $("cerrarForja").addEventListener("click",()=>{$("forja").hidden=true;document.body.style.overflow=""});
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("forja").hidden&&!document.querySelector(".hoja-fondo,.desplegable"))$("cerrarForja").click()});
 
