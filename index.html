@@ -1256,7 +1256,7 @@ function cambiarVista(seccion,sub,volverArriba=true){
  const raices=[...new Set(Object.values(RAICES_VISTA).flat())],mostrar=new Set(RAICES_VISTA[v.id]||[]);
  for(const id of raices)$(id)?.classList.toggle("vista-oculta",!mostrar.has(id));
  // Al volver a Mesa, la narración abre en el último mensaje: oculta pierde su desplazamiento (GT-ERR-139).
- if(v.id==="mesa"){const box=$("relato"),bajar=()=>{box.scrollTop=box.scrollHeight};if(box){bajar();setTimeout(bajar,0)}}
+ if(v.id==="mesa"){const box=$("relato"),bajar=()=>{box.scrollTop=box.scrollHeight};if(box)bajar()}
  if(v.id==="personaje"){$("hoja").hidden=false;if(hojaPJ)pintarHoja()}
  if(v.id==="forja"){$("forja").hidden=false;if(forjaCat)armarForja();else cargarForja()}
  if(v.id==="conexion")$("ajustes").hidden=false;
