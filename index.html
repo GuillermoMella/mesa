@@ -329,14 +329,14 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 #cabeceraApp{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 #cabeceraApp h1{font-size:1.15rem;margin:0}#cabeceraApp .eyebrow{display:none}#cabeceraApp>div:last-child{margin-left:auto}
 #cabeceraApp #abrirHoja,#cabeceraApp #abrirForja,#cabeceraApp #abrirAjustes,#cabeceraApp #abrirDeclaracion{display:none}
-#tabs{display:none!important}.vista-oculta,.subvista-oculta{display:none!important}
+#tabs{display:none!important}.vista-oculta{display:none!important}
 #fondoMenu{position:fixed;inset:0;background:#0009;z-index:60}
 #menuApp{position:fixed;inset:0 auto 0 0;width:min(86vw,340px);height:100dvh;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:16px;background:var(--panel);z-index:61;border-right:1px solid var(--line)}
 #menuApp button{display:block;width:100%;text-align:left;margin:5px 0;white-space:normal}
 #menuApp [aria-current="page"]{border-color:var(--ember);color:var(--fg)}.menu-sub{padding-left:14px;border-left:2px solid var(--line);margin-left:10px}
 #borradorTurno{font-size:.9rem;padding:10px}#partesTurno{padding-left:20px;max-height:25vh;overflow:auto}#partesTurno li{margin:7px 0}#partesTurno button{width:auto;margin-left:8px}
 #forja.hoja-pj,#hoja.hoja-pj{position:static;inset:auto;display:block;overflow:visible;background:transparent;padding:0;z-index:auto;max-height:none}
-#forja .forja{max-height:none}#panelPedido,#panelReaccion,#panelDano{scroll-margin-top:100px}
+#forja .forja{max-height:none}.ancla-subvista{scroll-margin-top:100px}
 @media(max-width:600px){.wrap{padding:10px;gap:10px}#cabeceraApp>div:first-of-type{display:none}#cabeceraApp button{min-height:44px}#cabeceraApp #listo{min-width:90px}#borradorTurno{margin:0}}
 </style>
 </head>
@@ -1176,7 +1176,7 @@ function pintarSubida(sv){
     catch(e){env.disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía la misma.`}};
 }
 
-// ---- Navegación por vistas y subsecciones ----
+// ---- Navegación por páginas y anclas internas ----
 let reaccionVista=null;
 let pestana="mesa",turnoVisto=null,vistaApp={seccion:"mesa",sub:"relato"},navegacionArmada=false,focoAntesMenu=null;
 const esPC=()=>matchMedia("(min-width:1000px)").matches;
@@ -1190,6 +1190,12 @@ const VISTAS_APP=[
  {id:"registro",nombre:"Registro",subs:[["registro","Historial de combate",["panelRegistro"]],["tiradas","Tirada solicitada",["panelPedido"]]]},
  {id:"conexion",nombre:"Conexión",subs:[["ajustes","Conexión",["ajustes"]]]}
 ];
+const RAICES_VISTA={
+ mesa:["panelMesa"],exploracion:["panelPiso"],
+ combate:["panelCombate","panelTurno","panelReaccion","panelDano","salvacionesAutoVista","panelConm"],
+ personaje:["hoja","panelShalock","panelSubida"],equipo:["panelEquipo"],forja:["forja"],
+ registro:["panelRegistro","panelPedido"],conexion:["ajustes"]
+};
 function envolverDesdeHasta(desde,hasta,id){
  if($(id))return;const p=desde.parentNode,c=document.createElement("div");c.id=id;p.insertBefore(c,desde);
  let n=desde;while(n){const siguiente=n.nextSibling;c.appendChild(n);if(n===hasta)break;n=siguiente}
@@ -1207,6 +1213,9 @@ function armarNavegacion(){
  envolverDesdeHasta($("tituloPiso"),$("lugaresPiso"),"mapaExploracionVista");
  $("panelPiso").insertBefore($("provPiso"),$("cargaPiso"));
  const auto=document.createElement("section");auto.id="salvacionesAutoVista";auto.className="panel";$("arriba").appendChild(auto);
+ // La subida pertenece a Personaje, no a la página Mesa: queda como bloque independiente.
+ $("panelShalock").parentNode.insertBefore($("panelSubida"),$("panelShalock").nextSibling);
+ for(const x of VISTAS_APP)for(const z of x.subs)for(const id of z[2])$(id)?.classList.add("ancla-subvista");
  try{const x=JSON.parse(localStorage.getItem("mesa_vista_app")||"null");if(x)vistaApp=x}catch(e){}
  $("abrirMenu").onclick=()=>abrirMenuApp();$("cerrarMenu").onclick=cerrarMenuApp;$("fondoMenu").onclick=cerrarMenuApp;
  document.addEventListener("keydown",e=>{if($("menuApp").hidden)return;if(e.key==="Escape"){e.preventDefault();cerrarMenuApp()}
@@ -1218,16 +1227,15 @@ function cerrarMenuApp(){$("menuApp").hidden=true;$("fondoMenu").hidden=true;$("
 function cambiarVista(seccion,sub,volverArriba=true){
  const v=VISTAS_APP.find(x=>x.id===seccion)||VISTAS_APP[0],sv=v.subs.find(x=>x[0]===sub)||v.subs[0];vistaApp={seccion:v.id,sub:sv[0]};pestana=v.id;$("abrirMenu").textContent="☰ "+v.nombre;
  try{localStorage.setItem("mesa_vista_app",JSON.stringify(vistaApp))}catch(e){}
- const actuales=new Set(sv[2]),raices=["panelMesa","panelPiso","panelCombate","panelTurno","panelConm","panelShalock","panelEquipo","panelRegistro","panelPedido","panelReaccion","panelDano","forja","hoja","ajustes","salvacionesAutoVista"];
- const mostrar=new Set(actuales);if(v.id==="mesa"||sv[0]==="subida")mostrar.add("panelMesa");if(v.id==="exploracion")mostrar.add("panelPiso");if(v.id==="forja")mostrar.add("forja");if(v.id==="equipo")mostrar.add("panelEquipo");if(v.id==="combate"&&["mapa","combatientes"].includes(sv[0]))mostrar.add("panelCombate");
+ const raices=[...new Set(Object.values(RAICES_VISTA).flat())],mostrar=new Set(RAICES_VISTA[v.id]||[]);
  for(const id of raices)$(id)?.classList.toggle("vista-oculta",!mostrar.has(id));
- for(const id of ["mapaCombateVista","combatientes","forjaDisenoVista","forjaEncargoVista","fjSecPedido","fjSecHerrero","fjSecMagia","equipoInventarioVista","equipoPendientes","historiaVista","declaracion","panelSubida","mapaExploracionVista","viajeVista","buscarVista","descansoVista","cargaPiso","provPiso"])$(id)?.classList.toggle("subvista-oculta",!actuales.has(id));
- if(actuales.has("hoja")){$("hoja").hidden=false;if(hojaPJ)pintarHoja()}
+ if(v.id==="personaje"){$("hoja").hidden=false;if(hojaPJ)pintarHoja()}
  if(v.id==="forja"){$("forja").hidden=false;if(forjaCat)armarForja();else cargarForja()}
- if(actuales.has("ajustes"))$("ajustes").hidden=false;
- const m=$("seccionesMenu");m.replaceChildren();for(const x of VISTAS_APP){const b=document.createElement("button");b.className="sec";b.textContent=x.nombre;b.setAttribute("aria-current",x.id===v.id?"page":"false");b.onclick=()=>cambiarVista(x.id,x.subs[0][0]);m.appendChild(b);
+ if(v.id==="conexion")$("ajustes").hidden=false;
+ const m=$("seccionesMenu");m.replaceChildren();for(const x of VISTAS_APP){const b=document.createElement("button");b.className="sec";b.textContent=x.nombre;b.setAttribute("aria-current",x.id===v.id?"page":"false");b.onclick=()=>{cambiarVista(x.id,x.subs[0][0]);cerrarMenuApp()};m.appendChild(b);
   if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q)}m.appendChild(grupo)}}
- if(volverArriba)window.scrollTo({top:0,behavior:"instant"});
+ // Todas las subsecciones de la página permanecen visibles; el menú solo salta a su ancla.
+ if(volverArriba){const ancla=sv[2].map(id=>$(id)).find(Boolean);ancla?.scrollIntoView?.({block:"start",behavior:"instant"})}
 }
 function elegirPestana(nombre){const x={mesa:["mesa","relato"],turno:["combate","acciones"],mapa:["combate","mapa"],equipo:["equipo","inventario"],shalock:["personaje","recursos"],registro:["registro","registro"]}[nombre]||[nombre,null];cambiarVista(...x)}
 function pestanas(cb){document.querySelector(".wrap").classList.remove("con-pestanas");$("tabs").hidden=true;armarNavegacion();turnoVisto=cb?.turno||null;
