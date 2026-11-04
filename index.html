@@ -323,6 +323,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
 .relato-entrada{padding:12px 0;border-bottom:1px solid #65728555}
 .relato-entrada p{white-space:pre-wrap;line-height:1.65;margin:6px 0}
 .relato-entrada small{opacity:.75}
+#historiaVista>.eyebrow{margin-bottom:8px}
 #estadoRelato,#estadoDeclaracion{white-space:pre-wrap}
 
 /* Navegación por vistas: misma interfaz en móvil y escritorio. */
@@ -395,7 +396,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
         <section class="panel">
           <label for="fjEstetica">Aspecto (cómo se ve, materiales, detalles)<textarea id="fjEstetica" rows="3"></textarea></label>
           <label for="fjNota">Nota para el DM (para qué es: premio del torneo, compra…)<textarea id="fjNota" rows="2"></textarea></label>
-          <button type="button" id="fjEncargar" disabled>Añadir encargo al turno</button>
+          <button type="button" id="fjEncargar" disabled>Confirmar encargo</button>
           <div class="estado" id="fjEstado"></div>
           <div class="fj-fuente">El precio lo recalcula la herramienta del DM al llegar el encargo; si difiere, manda ese. La descripción final la escribe el DM.</div>
         </section>
@@ -419,7 +420,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="tirada"><span class="nombre" id="nombre">Ninguna por ahora</span><span class="mod" id="mod"></span></div>
     <div class="estado" id="porQuePedido" hidden></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
-    <button id="tirar" disabled>Tirar y añadir al turno</button>
+    <button id="tirar" disabled>Tirar y confirmar</button>
     <div class="estado" id="estado"></div>
   </section>
     <section class="panel urgente" id="panelReaccion" hidden>
@@ -437,7 +438,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <div id="opcDano" hidden>
         <div class="opciones"><label id="lblCastigoDano"><input type="checkbox" id="castigoDano"> Castigo divino (2d8 radiante)</label></div>
         <label for="espCastigo">Espacio para el castigo<select id="espCastigo"></select></label>
-        <button id="tirarDano">Añadir decisión de daño al turno</button>
+        <button id="tirarDano">Confirmar decisión de daño</button>
       </div>
       <div class="estado" id="resDano"></div>
       <div class="estado" id="estadoDano"></div>
@@ -451,11 +452,12 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   </nav>
 
   <section id="panelMesa" class="panel pane" data-pane="mesa" aria-live="polite">
-    <div class="eyebrow">Lo que dice el DM</div>
-    <p id="mensaje">Conectando…</p>
-
-    <div id="relato" role="log" aria-label="Conversación de la partida" aria-live="polite"></div>
-    <div class="estado" id="estadoRelato"></div>
+    <div id="historiaVista">
+      <div class="eyebrow">Narración</div>
+      <div id="relato" role="log" aria-label="Conversación de la partida" aria-live="polite"></div>
+      <div class="estado" id="estadoRelato"></div>
+      <p id="mensaje" hidden></p>
+    </div>
     <div class="sub" id="declaracion">
       <h2>¿Qué quieres hacer?</h2>
       <p>Combina las actividades que necesites y escribe lo que intentas. Se resuelven en el orden elegido, hasta la próxima decisión de la escena.</p>
@@ -464,7 +466,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <label for="mensajeDM">Mensaje para el DM <span class="estado">Siempre disponible, con o sin actividades.</span></label>
       <textarea id="mensajeDM" maxlength="12000" placeholder="Lo que dices, haces, preguntas o quieres aclarar…"></textarea>
       <p class="estado">En combate, arma tus acciones en «Mi turno»; aquí puedes añadir diálogo e intenciones. «Listo» avisa al DM cuando quieras su respuesta.</p>
-      <button id="enviarDeclaracion">Añadir mensaje al turno</button>
+      <button id="enviarDeclaracion">Confirmar mensaje e intenciones</button>
       <div class="estado" id="estadoDeclaracion" role="status"></div>
     </div>
     <div class="sub" id="panelSubida" hidden></div>
@@ -477,7 +479,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="sub" id="equipoPendientes" hidden>
       <div class="eyebrow">Cambios sin confirmar</div>
       <ul class="eq-cambios" id="equipoCambios"></ul>
-      <button id="equipoConfirmar">Añadir cambios al turno</button>
+      <button id="equipoConfirmar">Confirmar cambios de equipo</button>
       <button class="sec" id="equipoDescartar">Descartar</button>
     </div>
     <div class="estado" id="equipoEstado"></div>
@@ -506,18 +508,18 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
       <option value="juntar_lena">Juntar leña (si el camino pasa por terreno con madera)</option></select></label>
     <div class="estado" id="infoPiso">Toca un hexágono que ya viste para ver qué cuesta llegar.</div>
     <label for="textoPiso">Lo que Shalock hace y dice (opcional)<textarea id="textoPiso" rows="3"></textarea></label>
-    <button id="irPiso" disabled>Añadir traslado al turno</button>
-    <button class="sec" id="soloTextoPiso">Añadir texto al turno</button>
+    <button id="irPiso" disabled>Confirmar traslado</button>
+    <button class="sec" id="soloTextoPiso">Confirmar texto</button>
     <div class="eyebrow" style="margin-top:14px">Buscar donde están</div>
     <label for="horasBuscar">Cuánto tiempo<select id="horasBuscar"><option value="1">Una hora</option><option value="2">Dos horas</option><option value="4">Cuatro horas</option></select></label>
     <div class="estado" id="infoBuscar"></div>
-    <button class="sec" id="buscarPiso">Añadir búsqueda al turno</button>
+    <button class="sec" id="buscarPiso">Confirmar búsqueda</button>
     <div class="eyebrow" style="margin-top:14px">Descansar</div>
     <div class="estado" id="infoDescanso"></div>
     <div id="dadosDescanso"></div>
     <label class="check"><input type="checkbox" id="fogataDescanso"> Encender una fogata (gasta leña para una noche)</label>
-    <button class="sec" id="descansoCorto">Añadir descanso corto</button>
-    <button class="sec" id="descansoLargo">Añadir descanso largo</button>
+    <button class="sec" id="descansoCorto">Confirmar descanso corto</button>
+    <button class="sec" id="descansoLargo">Confirmar descanso largo</button>
     <div class="estado" id="estadoPiso"></div>
   </section>
 
@@ -549,8 +551,8 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="avisos"></div>
     <div class="estado" id="resTurno"></div>
     <div class="estado">«Enviar y seguir» manda lo armado y deja tu turno abierto: ves el resultado y armas lo que falta.</div>
-    <button class="sec" id="enviarParcial">Añadir esta parte (turno abierto)</button>
-    <button id="enviarTurno">Añadir acciones al turno</button>
+    <button class="sec" id="enviarParcial">Confirmar esta parte (turno abierto)</button>
+    <button id="enviarTurno">Confirmar acciones</button>
     <div class="estado" id="estadoTurno"></div>
   </section>
 
@@ -558,6 +560,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="eyebrow">Interruptores</div>
     <div class="estado">Quedan como los dejes, también para los próximos combates. El motor los aplica solo en cada ataque.</div>
     <div id="conmLista"></div>
+    <button id="conmConfirmar" disabled>Confirmar interruptores</button>
     <div class="estado" id="conmEstado"></div>
   </section>
 
@@ -599,7 +602,7 @@ function deB64(s){const t=atob(s.replace(/\n/g,""));return new TextDecoder().dec
 function cabeceras(extra){return Object.assign({"Authorization":"Bearer "+cfg.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"},extra||{})}
 
 function pintar(e){
-  $("mensaje").textContent=e.mensaje||"Sin novedades.";
+  $("mensaje").textContent=e.mensaje||""; // Compatibilidad con estados antiguos; relato.json es la narración visible.
   pedido=e.tirada||null;
   if(pedido){
     $("nombre").textContent=pedido.nombre||"Tirada";
@@ -608,7 +611,7 @@ function pintar(e){
     const pq=(pedido.por_que||[]).join(" · ");
     $("porQuePedido").hidden=!pq;$("porQuePedido").textContent=pq+(pq&&!pedido.modo?" → se anulan":"");
     $("tirar").disabled=!!pedido.automatica||enviados.has(pedido.id);
-    if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y añadir al turno";
+    if(!pendiente||pendiente.tirada.pedido!==pedido.id)$("tirar").textContent="Tirar y confirmar";
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
   $("panelPedido").hidden=!pedido;
@@ -777,7 +780,7 @@ function preseleccion(){
   const yaForzada=hoy>=lim-1e-9;
   if(yaForzada)lineas.push(`<span style="color:var(--warn)">Ya llevan ${lim} horas de marcha: toda esta marcha es forzada, con riesgo de agotamiento.</span>`);
   else if(extra.length)lineas.push(`<span style="color:var(--warn)">Pasa de ${lim} horas de marcha: al llegar a las ${lim} se detendrán y podrás decidir si siguen con marcha forzada, con riesgo de agotamiento.</span>`);
-  $("irPiso").textContent=yaForzada?"Confirmar la marcha forzada":"Confirmar la marcha";
+  $("irPiso").textContent=yaForzada?"Confirmar marcha forzada":"Confirmar traslado";
   if($("ritmoPiso").value==="rapido")lineas.push("A ritmo rápido, −5 a la Percepción pasiva.");
   if(forr)lineas.push("A ritmo rápido no se puede forrajear.");
   if($("actividadPiso").value!=="vigilar")lineas.push("Mientras no vigila, su Percepción pasiva no cuenta para notar amenazas ni lugares.");
@@ -785,16 +788,20 @@ function preseleccion(){
   $("irPiso").disabled=false;
 }
 // ---- Interruptores (DGT-226): lo que el jugador deja decidido de antemano; quedan con su último estado ----
-let conmLocal={};
+let conmLocal={},conmPendientes={};
 function pintarConm(){
   const lista=(hojaPJ&&hojaPJ.conmutadores)||[];$("panelConm").hidden=!lista.length;if(!lista.length)return;
   // Mientras el cambio viaja, se muestra lo que tocó el jugador (hasta un minuto o hasta que la ficha lo confirme).
   $("conmLista").innerHTML=lista.map(x=>{const l=conmLocal[x.id],act=l&&Date.now()-l.ts<60000?l.v:x.activo;if(l&&l.v===x.activo)delete conmLocal[x.id];
     return `<label class="conm"><input type="checkbox" data-conm="${esc(x.id)}" ${act?"checked":""}><b>${esc(x.nombre)}</b><div class="estado">${esc(x.texto)}</div></label>`}).join("");
-  $("conmLista").querySelectorAll("[data-conm]").forEach(i=>i.onchange=async()=>{
-    const id=i.dataset.conm,v=i.checked;conmLocal[id]={v,ts:Date.now()};
-    try{await enviarExploracion({tipo:"conmutadores",valores:{[id]:v},ts:Date.now()});$("conmEstado").textContent="Guardado."}
-    catch(e){$("conmEstado").textContent=`No se pudo guardar (${e.message}).`;delete conmLocal[id];i.checked=!v}})}
+  $("conmLista").querySelectorAll("[data-conm]").forEach(i=>i.onchange=()=>{
+    const id=i.dataset.conm,v=i.checked;conmLocal[id]={v,ts:Date.now()};conmPendientes[id]=v;
+    $("conmConfirmar").disabled=false;$("conmEstado").textContent="Cambios sin confirmar."});
+  $("conmConfirmar").disabled=!Object.keys(conmPendientes).length}
+$("conmConfirmar").addEventListener("click",async()=>{
+  const valores={...conmPendientes};if(!Object.keys(valores).length)return;const b=$("conmConfirmar");b.disabled=true;
+  try{await enviarExploracion({tipo:"conmutadores",valores,ts:Date.now()});conmPendientes={};$("conmEstado").textContent="Interruptores añadidos al turno. Pulsa Listo arriba."}
+  catch(e){b.disabled=false;$("conmEstado").textContent=`No se pudieron añadir (${e.message}).`}});
 
 // ---- Equipo (DGT-225): equipado y portado de cada uno; los cambios se arman aquí y al confirmar el DM los aplica ----
 let equipoPub=null,equipoVista=null,equipoCambios=[];
@@ -869,8 +876,8 @@ $("equipoDescartar").addEventListener("click",()=>{equipoCambios=[];$("equipoEst
 $("equipoConfirmar").addEventListener("click",async()=>{
   if(!equipoCambios.length)return;const b=$("equipoConfirmar");b.disabled=true;
   try{await enviarExploracion({tipo:"equipo",cambios:equipoCambios,ts:Date.now()});
-    equipoCambios=[];$("equipoEstado").textContent="Cambios añadidos al turno. Pulsa Listo arriba para aplicarlos.";pintarEquipo()}
-  catch(e){$("equipoEstado").textContent=`No se pudo enviar (${e.message}).`}
+    equipoCambios=[];$("equipoEstado").textContent="Cambios añadidos al turno. Pulsa Listo arriba para enviarlos.";pintarEquipo()}
+  catch(e){$("equipoEstado").textContent=`No se pudieron añadir (${e.message}).`}
   finally{b.disabled=false}});
 
 // Carga: cuánto lleva cada uno contra su capacidad (FUE × 15 lb) y qué; lo guardado en otros lados, aparte.
@@ -928,12 +935,12 @@ function pintarPiso(p){
 
 // ---- Intenciones de campaña y narración (catálogo compartido con el puente) ----
 const ACTIVIDADES_APP={"version":1,"generales":["Estas actividades son intenciones combinables en el orden declarado, no una autorización para resolverlas todas sin pausas. Detenerse en el primer punto que requiera respuesta o elección.","Leer system/MESA.md y system/reglas_del_jugador.md; aplicar reglas vigentes, herramientas y transacciones validadas. No inventar resultados ni ejecutar acciones no declaradas.","Si el vigilante ya resolvió una acción, usar sus resultados: nunca repetir tiradas, gastos, movimientos, compras ni descansos para leer la salida.","Antes de representar a cualquier PNJ, consultar personalidad, voz, relación, conocimientos y ánimo. Interpretar esos rasgos según la escena, sin convertirlos en tics obligatorios ni imponer humor fuera de lugar.","Mostrar solo lo que el personaje percibe o conoce; sin secretos, fichas privadas, instrucciones internas ni identificadores del DM.","Registrar los cambios confirmados y actualizar las vistas afectadas antes de narrar su resultado.","Toda narración, pregunta, diálogo o aclaración dirigida al jugador se publica en la app mediante mesa_remota.py narrar; el chat de Claude queda para errores operativos. Después se vuelve al monitor existente."],"categorias":[{"id":"social","nombre":"Conversar e interactuar","ayuda":"Con quién hablas y qué dices o intentas.","instrucciones":["Consultar ficha, temperamento, voz, relación, conocimiento y ánimo de cada PNJ antes de representarlo.","Actuar su personalidad con ritmo, vocabulario y conducta propios, modulados por la situación: el humor no obliga a bromear en un funeral ni borra dolor, miedo o respeto.","Los compañeros tienen iniciativa y autonomía; no imponer un coro de opiniones ni convertir al PJ en líder por defecto.","Detenerse en la primera réplica o gesto que requiera respuesta; registrar conocimiento y consecuencias sociales solo si corresponde."]},{"id":"negociar","nombre":"Negociar y acordar","ayuda":"Propuesta, condiciones, interlocutor y límites que quieres plantear.","instrucciones":["Resolver intereses, autoridad, recursos y relación de las partes; una prueba no sustituye la conversación ni garantiza obediencia.","Distinguir propuesta, contraoferta y acuerdo aceptado; no aceptar ni gastar por el jugador.","Detallar precio, alcance, obligaciones, plazos y devolución si procede; guardar literalmente lo acordado.","Auditar cambios sociales o políticos cuando el hecho sea relevante, con canal y evidencia; no propagar reputación automáticamente."]},{"id":"comercio","nombre":"Comprar, vender e intercambiar","ayuda":"Artículos, cantidades, quién compra o vende y presupuesto, si lo defines.","instrucciones":["Comprobar existencias, propiedad, cantidades, dinero, precios vigentes y disposición del comerciante con herramientas.","Presentar oferta y condiciones antes de confirmar; una intención de comprar o vender no autoriza cualquier precio.","Al consumarse el trato, registrar una sola vez dinero de ambas partes cuando corresponda, objetos, cantidades, dueño, portador, peso y provisiones; no limitarse a narrar la entrega.","Actualizar la vista de equipo y recursos después de registrar; conservar comprobantes y no duplicar un trato al reintentar."]},{"id":"traslado","nombre":"Trasladarse y viajar","ayuda":"Destino o dirección, ruta, ritmo y precauciones.","instrucciones":["Leer posición y ruta perceptible; avanzar solo el tramo declarado hasta el primer desvío, peligro o decisión.","Aplicar tiempo, terreno, ritmo, carga, luz, provisiones, marcha forzada y encuentros mediante las herramientas pertinentes.","No ejecutar un traslado dos veces si el vigilante o el mapa ya lo resolvió; usar sus recibos.","Revisar relojes al avanzar el tiempo y narrar las señales perceptibles del trayecto, sin prometer seguridad ni revelar mapa oculto."]},{"id":"explorar","nombre":"Explorar y reconocer","ayuda":"Qué zona reconoces y cómo lo haces.","instrucciones":["Usar el mapa y las presencias existentes; no crear hallazgos convenientes por una etiqueta.","Distinguir lo visto, lo oído y lo supuesto; atender sentidos, luz, cobertura, sigilo y conocimiento previo.","Aplicar solo tiempo, riesgo y tiradas pertinentes; detenerse ante el primer descubrimiento o decisión que cambie la intención.","Registrar descubrimientos y conocimiento por canal real; publicar solo la parte conocida del mapa."]},{"id":"investigar","nombre":"Investigar y buscar información","ayuda":"Qué examinas, qué buscas y por qué medio.","instrucciones":["Precisar objeto, pregunta, método y fuentes disponibles; no asumir una conclusión o una búsqueda exhaustiva.","Resolver si hace falta prueba, su tiempo y consecuencias; pedir la tirada a la app, sin inventarla ni repetirla para mejorar el resultado.","Entregar indicios accesibles al método y resultado; distinguir testimonio, rumor y deducción de hechos comprobados.","Registrar nueva información, canal y fuente, y revisar experiencia solo por logros que la merezcan."]},{"id":"objetos","nombre":"Usar objetos e interactuar con el entorno","ayuda":"Objeto o elemento y qué quieres hacer con él.","instrucciones":["Comprobar posesión, alcance, manos, herramientas, estado, cantidad, uso y restricciones del objeto o elemento.","Resolver coste de acción, consumos y riesgos cuando proceda; no equipar ni gastar algo distinto de lo declarado.","Registrar consumo, traslado, desgaste o cambio de estado confirmado y actualizar las vistas afectadas."]},{"id":"magia","nombre":"Lanzar magia o usar capacidades","ayuda":"Conjuro o capacidad, objetivos, intención y elecciones.","instrucciones":["Leer la regla oficial registrada, objetivos, alcance, visibilidad, tiempo, componentes, concentración y recursos.","Resolver elecciones y gasto con herramientas; solicitar en la app las tiradas necesarias.","No aplicar de nuevo capacidades, ataques, curaciones o espacios ya resueltos por el motor; usar los recibos.","La magia no da información, alcance ni efectos fuera de su regla; publicar duración y efectos que el jugador pueda conocer."]},{"id":"descanso","nombre":"Descansar, acampar y esperar","ayuda":"Tipo de descanso o espera, duración y preparativos.","instrucciones":["Comprobar terreno, seguridad, horario, último descanso y límites; no convertir una propuesta en descanso completado.","Aplicar una sola vez tiempo, encuentros, interrupciones, provisiones, luz, agotamiento y recuperación mediante herramientas.","Conservar el progreso real si se interrumpe, sin volver a tirar un tramo ya resuelto.","Detenerse si surge una decisión; actualizar recursos y reloj al resolver."]},{"id":"trabajo","nombre":"Trabajar, fabricar y entrenar","ayuda":"Tarea, materiales, herramientas, dedicación y objetivo.","instrucciones":["Comprobar competencia, herramientas, instalaciones, materiales, dinero y tiempo disponibles según la regla o acuerdo registrado.","Ofrecer costes y duración antes de comprometer recursos no autorizados; distinguir encargo, avance y producto terminado.","Registrar progreso, consumos, pagos y producto o aprendizaje solo al cumplirse sus requisitos; avanzar tiempo y revisar relojes."]},{"id":"cuadrilla","nombre":"Organizar la cuadrilla y repartir","ayuda":"Propuesta de reparto, tarea, equipo o acuerdo del grupo.","instrucciones":["Leer propiedad, carga, acuerdos y autonomía de los compañeros; el jugador declara su propuesta, no la decisión de todos.","Representar aceptación, desacuerdo o iniciativa según motivos y conocimiento de cada persona.","Registrar solo el reparto o acuerdo realmente aceptado, con dueño, portador, cantidades y carga; no duplicar transferencias hechas en Equipo."]},{"id":"gestion","nombre":"Encargos, organizaciones y asuntos pendientes","ayuda":"Encargo, compromiso, organización o asunto que quieres atender.","instrucciones":["Consultar compromisos, plazos, autoridad y recursos pertinentes, sin abrir ni simular todo el mundo.","Distinguir propuesta de decisión autorizada; registrar contratos y cambios verificables, con valor anterior esperado.","Aplicar consecuencias políticas o sociales solo con canal, evidencia y afectados concretos; no atribuir conocimiento global."]},{"id":"combate","nombre":"Combatir","ayuda":"Intención, coordinación o aclaración para las acciones de combate.","instrucciones":["Usar los ataques, movimientos, reacciones, recursos y recibos del motor existente; no resolver de nuevo lo ya enviado desde Mi turno.","Respetar iniciativas, economía de acciones, objetivos por impacto, visibilidad y ventanas de reacción.","Narrar resultados perceptibles con voz y conducta de los combatientes, sin mostrar CA oculta, estadísticas ni decisiones del enemigo.","Pedir las elecciones o tiradas pendientes en la app y detenerse antes de decidir por el PJ."]},{"id":"libre","nombre":"Otra acción o aclaración","ayuda":"Cualquier acción, diálogo, pregunta o corrección que no encaje arriba.","instrucciones":["Interpretar la intención expresada y consultar solo los protocolos pertinentes.","Si falta una elección imprescindible, preguntarla por la app antes de aplicar cambios; no forzar una categoría ni inventar consentimiento."]}]};
-let declaracion={actividades:[],mensaje:""},salidaDeclaracion=null,esperasDM=[],relatoDM={mensajes:[]},etagRelato=null,leyendoRelato=false,firmaRelato="";
+let declaracion={actividades:[],mensaje:""},declaracionConfirmada=false,salidaDeclaracion=null,esperasDM=[],relatoDM={mensajes:[]},etagRelato=null,leyendoRelato=false,firmaRelato="";
 const claveDeclaracion=()=>"mesa_partida_"+cfg.repo;
-function guardarDeclaracion(){localStorage.setItem(claveDeclaracion(),JSON.stringify({declaracion,salidaDeclaracion,esperasDM}))}
+function guardarDeclaracion(){localStorage.setItem(claveDeclaracion(),JSON.stringify({declaracion,declaracionConfirmada,salidaDeclaracion,esperasDM}))}
 function cargarDeclaracion(){
-  declaracion={actividades:[],mensaje:""};salidaDeclaracion=null;esperasDM=[];relatoDM={mensajes:[]};etagRelato=null;firmaRelato="";
-  try{const x=JSON.parse(localStorage.getItem(claveDeclaracion())||"{}");declaracion=x.declaracion||declaracion;salidaDeclaracion=x.salidaDeclaracion||null;esperasDM=x.esperasDM||[]}catch(e){}
+  declaracion={actividades:[],mensaje:""};declaracionConfirmada=false;salidaDeclaracion=null;esperasDM=[];relatoDM={mensajes:[]};etagRelato=null;firmaRelato="";
+  try{const x=JSON.parse(localStorage.getItem(claveDeclaracion())||"{}");declaracion=x.declaracion||declaracion;declaracionConfirmada=!!x.declaracionConfirmada;salidaDeclaracion=x.salidaDeclaracion||null;esperasDM=x.esperasDM||[]}catch(e){}
   $("mensajeDM").value=declaracion.mensaje||"";pintarActividades();pintarRelato();
   $("estadoDeclaracion").textContent=salidaDeclaracion?"Hay un envío pendiente: pulsa Listo para reenviar el mismo mensaje.":"";
 }
@@ -944,7 +951,7 @@ function pintarActividades(){
   for(const c of ACTIVIDADES_APP.categorias){
     const b=document.createElement("button");b.type="button";b.className="sec";b.textContent=c.nombre;
     const i=declaracion.actividades.findIndex(x=>x.id===c.id);b.setAttribute("aria-pressed",String(i>=0));b.disabled=!!salidaDeclaracion;
-    b.onclick=()=>{if(i>=0)declaracion.actividades.splice(i,1);else declaracion.actividades.push({id:c.id,detalle:""});guardarBorrador();pintarActividades()};opciones.appendChild(b);
+    b.onclick=()=>{if(i>=0)declaracion.actividades.splice(i,1);else declaracion.actividades.push({id:c.id,detalle:""});declaracionConfirmada=false;guardarBorrador();pintarActividades()};opciones.appendChild(b);
   }
   declaracion.actividades.forEach((a,i)=>{
     const c=catalogoActividad(a.id);if(!c)return;
@@ -953,12 +960,12 @@ function pintarActividades(){
     for(const [texto,delta] of [["↑",-1],["↓",1],["Quitar",0]]){
       const b=document.createElement("button");b.type="button";b.className="sec";b.textContent=texto;b.setAttribute("aria-label",delta?`${delta<0?"Subir":"Bajar"} ${c.nombre}`:`Quitar ${c.nombre}`);
       b.disabled=!!salidaDeclaracion||(delta!==0&&(i+delta<0||i+delta>=declaracion.actividades.length));
-      b.onclick=()=>{if(!delta)declaracion.actividades.splice(i,1);else [declaracion.actividades[i],declaracion.actividades[i+delta]]=[declaracion.actividades[i+delta],declaracion.actividades[i]];guardarBorrador();pintarActividades()};cab.appendChild(b);
+      b.onclick=()=>{if(!delta)declaracion.actividades.splice(i,1);else [declaracion.actividades[i],declaracion.actividades[i+delta]]=[declaracion.actividades[i+delta],declaracion.actividades[i]];declaracionConfirmada=false;guardarBorrador();pintarActividades()};cab.appendChild(b);
     }
     const label=document.createElement("label");label.textContent=c.ayuda;const campo=document.createElement("textarea");campo.maxLength=6000;campo.value=a.detalle;campo.disabled=!!salidaDeclaracion;campo.setAttribute("aria-label",c.nombre);
-    campo.oninput=()=>{a.detalle=campo.value;guardarBorrador()};label.appendChild(campo);bloque.append(cab,label);detalles.appendChild(bloque);
+    campo.oninput=()=>{a.detalle=campo.value;declaracionConfirmada=false;guardarBorrador()};label.appendChild(campo);bloque.append(cab,label);detalles.appendChild(bloque);
   });
-  $("mensajeDM").disabled=!!salidaDeclaracion;$("enviarDeclaracion").textContent="Mensaje incluido en el próximo Listo";
+  $("mensajeDM").disabled=!!salidaDeclaracion;$("enviarDeclaracion").textContent=declaracionConfirmada?"Mensaje confirmado":"Confirmar mensaje e intenciones";
 }
 function notaCompatible(id,datos){
   const lineas=[`Turno de la app: ${id}`,"Intenciones del jugador, en orden:"];
@@ -989,7 +996,7 @@ async function enviarDeclaracion(){
       const j=await previo.json();if(JSON.stringify(JSON.parse(deB64(j.content)))!==JSON.stringify(t))throw Error("El envío existente tiene otro contenido");
     }
     if(!esperasDM.some(x=>x.id===id))esperasDM.push({id,actividades:t.actividades,mensaje:t.mensaje,ts:t.ts});
-    salidaDeclaracion=null;declaracion={actividades:[],mensaje:""};$("mensajeDM").value="";guardarDeclaracion();pintarActividades();pintarRelato();
+    salidaDeclaracion=null;declaracion={actividades:[],mensaje:""};declaracionConfirmada=false;$("mensajeDM").value="";guardarDeclaracion();pintarActividades();pintarRelato();
     $("estadoDeclaracion").textContent="Enviado. Esperando la respuesta del DM aquí.";
   }catch(e){$("estadoDeclaracion").textContent=`No se completó el envío (${e.message}). Pulsa Listo para reintentar el mismo mensaje.`}
   finally{b.disabled=false;arriba.disabled=false}
@@ -1001,7 +1008,7 @@ function pintarRelato(){
   const mensajes=relatoDM.mensajes||[],respondidos=new Set(mensajes.flatMap(m=>m.turnos||[]));
   const restantes=esperasDM.filter(x=>!respondidos.has(x.id));
   if(restantes.length!==esperasDM.length){esperasDM=restantes;guardarBorrador()}
-  $("estadoRelato").textContent=esperasDM.length?`Esperando respuesta del DM (${esperasDM.length} ${esperasDM.length===1?"mensaje":"mensajes"}).`:mensajes.length?"Narración actualizada.":"Las próximas respuestas del DM aparecerán aquí. El mensaje de escena actual se conserva arriba.";
+  $("estadoRelato").textContent=esperasDM.length?`Esperando respuesta del DM (${esperasDM.length} ${esperasDM.length===1?"mensaje":"mensajes"}).`:mensajes.length?"Narración actualizada.":"Las próximas respuestas del DM aparecerán aquí.";
   const firma=JSON.stringify([mensajes,esperasDM]);if(firma===firmaRelato)return;firmaRelato=firma;
   const box=$("relato"),alFinal=box.scrollHeight-box.scrollTop-box.clientHeight<50;box.replaceChildren();
   function agregar(autor,texto,ts,error=false){const a=document.createElement("article");a.className="relato-entrada";const titulo=document.createElement("strong");titulo.textContent=autor+(error?" · aviso":"");const p=document.createElement("p");p.textContent=texto;a.append(titulo,p);if(ts){const fecha=document.createElement("small");fecha.textContent=new Date(ts).toLocaleString();a.appendChild(fecha)}box.appendChild(a)}
@@ -1023,10 +1030,12 @@ async function sondearRelato(){
   }catch(e){$("estadoRelato").textContent=`No se pudo actualizar la narración (${e.message}). Se reintentará automáticamente.`}
   finally{leyendoRelato=false}
 }
-$("mensajeDM").addEventListener("input",()=>{declaracion.mensaje=$("mensajeDM").value;guardarBorrador()});
+$("mensajeDM").addEventListener("input",()=>{declaracion.mensaje=$("mensajeDM").value;declaracionConfirmada=false;guardarBorrador();pintarActividades()});
 $("mensajeDM").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();enviarTodo()}});
 $("abrirDeclaracion").addEventListener("click",()=>{cambiarVista("mesa","declaracion");$("declaracion").scrollIntoView({block:"start"});$("mensajeDM").focus()});
-$("enviarDeclaracion").addEventListener("click",()=>{guardarBorrador();$("estadoDeclaracion").textContent="Mensaje preparado. Envíalo con Listo arriba.";pintarBorradorTurno()});
+$("enviarDeclaracion").addEventListener("click",()=>{
+  if(!declaracion.mensaje.trim()&&!declaracion.actividades.length){$("estadoDeclaracion").textContent="Escribe un mensaje o elige una intención antes de confirmar.";return}
+  declaracionConfirmada=true;guardarBorrador();pintarActividades();$("estadoDeclaracion").textContent="Mensaje e intenciones añadidos al turno. Pulsa Listo arriba para enviarlos.";$("borradorTurno").open=true});
 $("listo").addEventListener("click",enviarTodo);
 // ---- Fin de intenciones de campaña ----
 
@@ -1038,18 +1047,18 @@ $("irPiso").addEventListener("click",async()=>{
   if(!piso||!selPiso)return;
   const v=$("ritmoPiso").value;
   try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:selPiso,ritmo:ritmoDe(v),sigilo:v==="sigilo",forzada:(piso.marcha_hoy||0)>=piso.horas_de_marcha-1e-9,actividad:$("actividadPiso").value,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado. El DM narra el camino.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null;actividadTocada=false}
-  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+    $("estadoPiso").textContent="Traslado añadido al turno. Pulsa Listo arriba para enviarlo.";$("textoPiso").value="";$("irPiso").disabled=true;selPiso=null;actividadTocada=false;$("borradorTurno").open=true}
+  catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}
 });
 $("ritmoPiso").addEventListener("change",preseleccion);
 let actividadTocada=false;
 $("actividadPiso").addEventListener("change",()=>{actividadTocada=true;preseleccion()});
 $("seguirForzada").addEventListener("click",async()=>{const pf=piso&&piso.pregunta_forzada;if(!pf)return;
   try{await enviarExploracion({tipo:"exploracion",accion:"mover",destino:pf.destino,ritmo:pf.ritmo,sigilo:pf.sigilo,forzada:true,texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado: siguen con marcha forzada.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
+    $("estadoPiso").textContent="Marcha forzada añadida al turno. Pulsa Listo arriba para enviarla.";$("preguntaForzada").hidden=true;$("borradorTurno").open=true}catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}});
 $("pararForzada").addEventListener("click",async()=>{
   try{await enviarExploracion({tipo:"exploracion",accion:"parar",texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado: se detienen aquí.";$("preguntaForzada").hidden=true}catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}});
+    $("estadoPiso").textContent="La decisión de parar fue añadida al turno. Pulsa Listo arriba para enviarla.";$("preguntaForzada").hidden=true;$("borradorTurno").open=true}catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}});
 // Descanso corto: los dados de golpe se eligen y se tiran aquí (cada uno + CON, mínimo 0, PHB).
 function pintarDescanso(p){
   const s=p.shalock||{dados_de_golpe:{},pg:0,pg_max:0,mod_con:0};
@@ -1063,8 +1072,8 @@ async function enviarDescanso(clase){
     $("dadosDescanso").querySelectorAll("select").forEach(x=>{const n=Number(x.value),caras=Number(x.dataset.dg.slice(1));
       if(n>0)dadosG[x.dataset.dg]=n; for(let i=0;i<n;i++){const v=d(caras);totales.push(Math.max(0,v+s.mod_con));detalle.push(`${x.dataset.dg}: ${v}${s.mod_con>=0?" + ":" − "}${Math.abs(s.mod_con)}`)}});
     if(totales.length){t.dados_de_golpe={dados:dadosG,totales};$("estadoPiso").textContent=`Dados de golpe: ${detalle.join("; ")} = ${totales.reduce((a,b)=>a+b,0)} PG.`}}
-  try{await enviarExploracion(t);$("estadoPiso").textContent=($("estadoPiso").textContent.startsWith("Dados")?$("estadoPiso").textContent+" ":"")+`Enviado el descanso ${clase}.`;$("textoPiso").value=""}
-  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+  try{await enviarExploracion(t);$("estadoPiso").textContent=($("estadoPiso").textContent.startsWith("Dados")?$("estadoPiso").textContent+" ":"")+`Descanso ${clase} añadido al turno. Pulsa Listo arriba para enviarlo.`;$("textoPiso").value="";$("borradorTurno").open=true}
+  catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}
 }
 $("descansoCorto").addEventListener("click",()=>enviarDescanso("corto"));
 $("descansoLargo").addEventListener("click",()=>enviarDescanso("largo"));
@@ -1073,13 +1082,13 @@ function infoBuscar(){if(!piso)return;const h=Number($("horasBuscar").value);
 $("horasBuscar").addEventListener("change",infoBuscar);
 $("buscarPiso").addEventListener("click",async()=>{
   try{await enviarExploracion({tipo:"exploracion",accion:"buscar",horas:Number($("horasBuscar").value),texto:$("textoPiso").value.trim()||null,ts:Date.now()});
-    $("estadoPiso").textContent="Enviado. El DM narra la búsqueda.";$("textoPiso").value=""}
-  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+    $("estadoPiso").textContent="Búsqueda añadida al turno. Pulsa Listo arriba para enviarla.";$("textoPiso").value="";$("borradorTurno").open=true}
+  catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}
 });
 $("soloTextoPiso").addEventListener("click",async()=>{
   const texto=$("textoPiso").value.trim(); if(!texto){$("estadoPiso").textContent="Escribe primero lo que hace o dice.";return}
-  try{await enviarExploracion({tipo:"exploracion",accion:"texto",texto,ts:Date.now()});$("estadoPiso").textContent="Enviado.";$("textoPiso").value=""}
-  catch(e){$("estadoPiso").textContent=`No se pudo enviar (${e.message}).`}
+  try{await enviarExploracion({tipo:"exploracion",accion:"texto",texto,ts:Date.now()});$("estadoPiso").textContent="Texto añadido al turno. Pulsa Listo arriba para enviarlo.";$("textoPiso").value="";$("borradorTurno").open=true}
+  catch(e){$("estadoPiso").textContent=`No se pudo añadir (${e.message}).`}
 });
 
 // ---- Subida de nivel (DGT-208) ----
@@ -1171,9 +1180,9 @@ function pintarSubida(sv){
     else abrirMulti(nombreSel[x.tipo],x.de,x.cantidad,v[x.tipo],l=>{v[x.tipo]=l;pintarSubida(subida)})});
   const env=$("subEnviar");if(env)env.onclick=async()=>{
     if(!envioSubida){const ts=Date.now();envioSubida={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"subida",clase:cl.clase,pg_dado:sub.pg.valor,pg_modo:sub.pg.modo,pg_dados:sub.pg.dados,elecciones:sub.elec,ts}}}
-    const est=$("subEstado");est.className="estado";est.textContent="Enviando…";env.disabled=true;
+    const est=$("subEstado");est.className="estado";est.textContent="Añadiendo al turno…";env.disabled=true;
     try{await agregarParteTurno(envioSubida.id,envioSubida.t,"subida de nivel");envioSubida=null;sub={clase:null,pg:null,elec:{}};est.className="estado ok";est.textContent="Subida añadida al turno. Pulsa Listo arriba."}
-    catch(e){env.disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía la misma.`}};
+    catch(e){env.disabled=false;est.className="estado bad";est.textContent=`No se pudo añadir (${e.message}). Aprieta de nuevo: se conserva la misma elección.`}};
 }
 
 // ---- Navegación por páginas y anclas internas ----
@@ -1948,9 +1957,9 @@ function pintarDano(){
   pintarSiguienteImpacto();
   const nombreBlanco=String(enCurso.objetivo).startsWith("@")?`el hexágono ${enCurso.objetivo.slice(1)}`:enCurso.objetivo;
   // Ya enviado: el resultado queda a la vista hasta que el jugador apriete «Listo» (antes se borraba al instante).
-  if(enCurso.enviado){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: daño enviado al DM.`;$("opcDano").hidden=true;
+  if(enCurso.enviado){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: daño confirmado para el turno.`;$("opcDano").hidden=true;
     $("resDano").textContent=enCurso.resumen||"";$("cerrarDano").hidden=false;return}
-  if(!v){$("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: ${enCurso.total}. Esperando si impacta…`;$("opcDano").hidden=true;return}
+  if(!v){const sinEnviar=partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida);$("veredicto").textContent=sinEnviar?`${enCurso.accion} contra ${nombreBlanco}: ataque confirmado. Pulsa Listo arriba para resolverlo.`:`${enCurso.accion} contra ${nombreBlanco}: ${enCurso.total}. Esperando si impacta…`;$("opcDano").hidden=true;return}
   $("veredicto").textContent=`${enCurso.accion} contra ${nombreBlanco}: `+(v.critico?"¡CRÍTICO!":v.impacta?"impactas.":"fallas.")+(v.reaccion?` ${v.reaccion}.`:"");
   $("opcDano").hidden=!v.impacta;
   const a=ataque(enCurso.id), esp=espacios();
@@ -1971,9 +1980,9 @@ function cargarPartesTurno(){try{partesTurno=JSON.parse(localStorage.getItem(cla
 function guardarPartesTurno(){localStorage.setItem(clavePartes(),JSON.stringify(partesTurno));pintarBorradorTurno()}
 function etiquetaParte(t){return t.tipo==="turno"?"Acciones de combate":t.tipo==="exploracion"?"Exploración: "+t.accion:t.tipo==="equipo"?"Cambios de equipo":t.tipo==="forja"?"Encargo: "+(t.nombre||""):t.tipo==="reaccion"?"Reacción: "+(t.opcion?.id||t.ataque?.accion||"dejar pasar"):t.tipo==="dano"?"Daño: "+t.accion:t.pedido?"Tirada: "+t.nombre:t.tipo||"Acción"}
 function pintarBorradorTurno(){
- if(!$("partesTurno"))return;const cuenta=partesTurno.length+(typeof declaracion!=="undefined"&&(declaracion.mensaje||declaracion.actividades.length)?1:0);$("tituloBorrador").textContent=`Turno por enviar · ${cuenta} ${cuenta===1?"parte":"partes"}`;
+ if(!$("partesTurno"))return;const hayDeclaracion=typeof declaracion!=="undefined"&&declaracionConfirmada&&(declaracion.mensaje||declaracion.actividades.length),cuenta=partesTurno.length+(hayDeclaracion?1:0);$("tituloBorrador").textContent=`Turno por enviar · ${cuenta} ${cuenta===1?"parte":"partes"}`;
  $("partesTurno").replaceChildren();
- if(typeof declaracion!=="undefined"&&(declaracion.mensaje||declaracion.actividades.length)){const li=document.createElement("li");li.textContent="Mensaje e intenciones: "+(declaracion.actividades.map(x=>catalogoActividad(x.id)?.nombre||x.id).join(" · "))+(declaracion.mensaje?" — "+declaracion.mensaje.slice(0,180):"");$("partesTurno").appendChild(li)}
+ if(hayDeclaracion){const li=document.createElement("li");li.textContent="Mensaje e intenciones: "+(declaracion.actividades.map(x=>catalogoActividad(x.id)?.nombre||x.id).join(" · "))+(declaracion.mensaje?" — "+declaracion.mensaje.slice(0,180):"");$("partesTurno").appendChild(li)}
  partesTurno.forEach((p,i)=>{const li=document.createElement("li");li.textContent=etiquetaParte(p.t)+(p.subida?" · recibida":"");
   const b=document.createElement("button");b.type="button";b.className="sec";b.textContent="Quitar";b.disabled=!!p.subida||enviandoTodo;b.onclick=()=>{partesTurno.splice(i,1);guardarPartesTurno()};li.appendChild(b);$("partesTurno").appendChild(li)});
 }
@@ -1982,11 +1991,12 @@ async function agregarParteTurno(id,t,mensaje){
  if(t.tipo==="turno"&&partesTurno.some(x=>x.t.tipo==="turno"&&x.id!==id))throw Error("Ya hay acciones de combate preparadas. Revisa esa parte antes de añadir otro turno");
  const viejo=partesTurno.find(x=>x.id===id);if(viejo){if(JSON.stringify(viejo.t)!==JSON.stringify(t))throw Error("La parte guardada tiene otro contenido");return}
  partesTurno.push({id,t:JSON.parse(JSON.stringify(t)),mensaje,subida:false});guardarPartesTurno();
- $("estadoEnvioGeneral").textContent="Parte añadida al borrador. Envíala con Listo arriba.";
+ $("borradorTurno").open=true;$("estadoEnvioGeneral").textContent="Parte añadida al borrador. Envíala con Listo arriba.";
 }
 async function enviarTodo(){
  if(enviandoTodo)return;
  if(!cfg.repo||!cfg.token){cambiarVista("conexion","ajustes");return}
+ if(!declaracionConfirmada&&(declaracion.mensaje.trim()||declaracion.actividades.length)){$("estadoEnvioGeneral").textContent="Hay un mensaje o intenciones sin confirmar.";cambiarVista("mesa","declaracion");$("estadoDeclaracion").textContent="Confirma este bloque antes de pulsar Listo.";return}
  // La acción que se está armando se incorpora aunque no se pulse su botón local.
  if(typeof pasos!=="undefined"&&pasos.length&&!partesTurno.some(x=>x.t.tipo==="turno")){
   if(!revisar()){cambiarVista("combate","acciones");return}await enviarTurno(false);
@@ -2110,11 +2120,11 @@ $("tirarDano").addEventListener("click",async()=>{
   }
   const t=enCurso.dano.t, est=$("estadoDano");
   $("resDano").textContent=t.danos.map(x=>x.dados.length?`${x.expresion}: ${x.dados.join(" + ")}${/[+-]\d+$/.test(x.expresion)?" "+x.expresion.match(/[+-]\d+$/)[0].replace(/^([+-])/,"$1 "):""} = ${x.total} ${x.tipo}`:`${x.total} ${x.tipo}`).join("; ");
-  est.className="estado";est.textContent="Enviando…";
+  est.className="estado";est.textContent="Añadiendo al turno…";
   try{
     await subirTirada(enCurso.dano.id,t,"daño de Shalock");
-    enCurso.enviado=true;enCurso.resumen=$("resDano").textContent;guardarEnCurso();est.className="estado ok";est.textContent="";$("castigoDano").checked=false;pintarDano();
-  }catch(e){est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo daño.`}
+    enCurso.enviado=true;enCurso.resumen=$("resDano").textContent;guardarEnCurso();est.className="estado ok";est.textContent="Daño añadido al turno. Pulsa Listo arriba para enviarlo.";$("castigoDano").checked=false;pintarDano();
+  }catch(e){est.className="estado bad";est.textContent=`No se pudo añadir (${e.message}). Aprieta de nuevo: se conserva el mismo daño.`}
 });
 
 // Reacción: ataque de oportunidad cuando el DM la ofrece.
@@ -2136,7 +2146,7 @@ function pintarReaccion(){
     if(o&&o.elegibles&&(!objs.length||objs.length>o.max)){$("estadoReaccion").textContent=`Elige entre 1 y ${o.max}.`;return}
     const tipoSel=$("opcionesReaccion").querySelector(`[data-tipo-reac="${id}"]:checked`);
     try{await enviarReaccion({tipo:"reaccion",ataque:null,opcion:{id,espacio:sel?sel.value:null,objetivos:objs,tipo_dano:tipoSel?tipoSel.value:null},ts:Date.now()});$("panelReaccion").hidden=true}
-    catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}});
+    catch(e){$("estadoReaccion").textContent=`No se pudo añadir (${e.message}).`}});
   $("lblArmaReaccion").firstChild.textContent=rp.tipo==="preparada"?"Acción preparada: ":"Ataque de oportunidad con";
   const armas=combate.shalock.acciones.filter(a=>rp.tipo==="preparada"?a.id===rp.ataque:a.clase==="arma");
   const prev=$("armaReaccion").value;
@@ -2153,11 +2163,11 @@ $("atacarReaccion").addEventListener("click",async()=>{
   const n=rp.tipo==="preparada"?cantidadImpactos(ataque(atq.id)):1;
   if(n>1){atq.objetivos_impactos=Array(n).fill(rp.objetivo);atq.indice_impacto=0}
   try{const id=await enviarReaccion({tipo:"reaccion",ataque:atq,preparada:rp.tipo==="preparada",ts:Date.now()});enCurso=Object.assign({tirada:id+".json"},atq);guardarEnCurso();$("panelReaccion").hidden=true;pintarDano()}
-  catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}
+  catch(e){$("estadoReaccion").textContent=`No se pudo añadir (${e.message}).`}
 });
 $("dejarReaccion").addEventListener("click",async()=>{
   try{await enviarReaccion({tipo:"reaccion",ataque:null,decision:"no",ts:Date.now()});$("panelReaccion").hidden=true}
-  catch(e){$("estadoReaccion").textContent=`No se pudo enviar (${e.message}).`}
+  catch(e){$("estadoReaccion").textContent=`No se pudo añadir (${e.message}).`}
 });
 
 function resumen(t){
@@ -2188,17 +2198,17 @@ async function enviarTurno(parcial){
   const t=envioTurno.t, est=$("estadoTurno");
   $("resTurno").textContent=resumen(t);
   if(t.accion?.impactos_tirados)$("resTurno").textContent+="\n"+t.accion.impactos_tirados.map((x,i)=>`Impacto ${i+1}: ${x.ataque.objetivo} · d20 ${x.ataque.modo?`${x.ataque.d20.join(" / ")} (${x.ataque.modo})`:x.ataque.d20[0]} · total ${x.ataque.total} · daño si impacta: ${x.danos.reduce((n,d)=>n+d.total,0)}`).join("\n");
-  est.className="estado";est.textContent="Enviando…";$("enviarTurno").disabled=true;
+  est.className="estado";est.textContent="Guardando en el turno…";$("enviarTurno").disabled=true;
   try{
     await subirTirada(envioTurno.id,t,"turno de Shalock");
     if(t.accion&&t.accion.tipo==="ataque"){enCurso=Object.assign({tirada:envioTurno.id+".json"},t.accion);guardarEnCurso()}
     envioTurno=null;Object.assign(form,{adicional:"",accion:"",notas:"",c:{},acManual:false,adManual:false});$("notas").value="";$("levantar").checked=false;movMapa={};pasos=[];pasoMapa=null;
-    $("enviarTurno").textContent="Añadir acciones al turno";
+    $("enviarTurno").textContent="Confirmar acciones";
     est.className="estado ok";est.textContent=t.parcial?"Parte añadida; se enviará con Listo arriba.":"Acciones añadidas al turno. Pulsa Listo arriba.";
     pintarCombate(combate);
   }catch(e){
-    $("enviarTurno").textContent="Reenviar el mismo turno";$("enviarTurno").disabled=false;
-    est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo resultado.`;
+    $("enviarTurno").textContent="Reintentar la misma confirmación";$("enviarTurno").disabled=false;
+    est.className="estado bad";est.textContent=`No se pudo añadir (${e.message}). Aprieta de nuevo: se conserva el mismo resultado.`;
   }
 }
 $("enviarTurno").addEventListener("click",()=>enviarTurno(envioTurno?envioTurno.t.parcial:false));
@@ -2251,14 +2261,14 @@ $("tirar").addEventListener("click",async()=>{
   }
   const {id,tirada}=pendiente,{dados,mod,total}=tirada;
   $("dado").textContent=dados.join(" · ")+(tirada.descartado!=null?` (y ${tirada.descartado})`:"");$("total").textContent=`${mod>=0?"+":"−"} ${Math.abs(mod)} = ${total}`;$("resultado").hidden=false;
-  const est=$("estado");est.className="estado";est.textContent="Enviando…";
+  const est=$("estado");est.className="estado";est.textContent="Añadiendo al turno…";
   try{
     await agregarParteTurno(id,tirada,"tirada "+(pedido.nombre||""));
     marcarEnviado(pedido.id);pendiente=null;
-    est.className="estado ok";est.textContent=`Enviada: ${dados.join(", ")} ${fmtMod(mod)} → ${total}`;
+    est.className="estado ok";est.textContent=`Añadida al turno: ${dados.join(", ")} ${fmtMod(mod)} → ${total}. Pulsa Listo arriba para enviarla.`;$("borradorTurno").open=true;
   }catch(e){
-    $("tirar").disabled=false;$("tirar").textContent="Reenviar la misma tirada";
-    est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Revisa la conexión y aprieta de nuevo, o escríbele el total al DM.`;
+    $("tirar").disabled=false;$("tirar").textContent="Reintentar la misma tirada";
+    est.className="estado bad";est.textContent=`No se pudo añadir (${e.message}). Revisa el borrador y aprieta de nuevo.`;
   }
 });
 
@@ -2550,9 +2560,9 @@ $("fjEncargar").onclick=async()=>{
   if(!envioForja){const ts=Date.now();envioForja={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"forja",taller:"magico",nombre:fj.nombre.trim(),
     base:fj.base,base_pedida:fj.base?null:String(fj.base_pedida||"").trim(),consumible:fj.consumible,estetica:fj.estetica.trim(),nota:fj.nota.trim(),
     propiedades:fj.propiedades.map(p=>Object.assign({},p,p.texto!==undefined?{texto:String(p.texto).trim()}:{})),precio_app:calc.precio_po,rareza_app:calc.rareza,ts}}}
-  est.className="estado";est.textContent="Enviando…";$("fjEncargar").disabled=true;
+  est.className="estado";est.textContent="Añadiendo al turno…";$("fjEncargar").disabled=true;
   try{await agregarParteTurno(envioForja.id,envioForja.t,"encargo de forja");envioForja=null;est.className="estado ok";est.textContent="Encargo añadido al turno. Pulsa Listo arriba.";refrescarForja(false)}
-  catch(e){$("fjEncargar").disabled=false;est.className="estado bad";est.textContent=`No se pudo enviar (${e.message}). Aprieta de nuevo: se reenvía el mismo.`}};
+  catch(e){$("fjEncargar").disabled=false;est.className="estado bad";est.textContent=`No se pudo añadir (${e.message}). Aprieta de nuevo: se conserva el mismo encargo.`}};
 $("abrirForja").addEventListener("click",()=>cambiarVista("forja","diseno"));
 $("cerrarForja").addEventListener("click",()=>{$("forja").hidden=true;document.body.style.overflow=""});
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("forja").hidden&&!document.querySelector(".hoja-fondo,.desplegable"))$("cerrarForja").click()});
