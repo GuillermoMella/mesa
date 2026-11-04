@@ -421,6 +421,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
     <div class="estado" id="porQuePedido" hidden></div>
     <div class="resultado" id="resultado" hidden><span class="dado" id="dado">–</span><span class="total" id="total"></span></div>
     <button id="tirar" disabled>Tirar y confirmar</button>
+    <button id="cerrarAuto" class="sec" hidden>Entendido</button>
     <div class="estado" id="estado"></div>
   </section>
     <section class="panel urgente" id="panelReaccion" hidden>
@@ -593,6 +594,20 @@ let cfg={repo:"",token:""}, etag=null, pedido=null, pendiente=null, enviados=new
 function leerCfg(){try{cfg=JSON.parse(localStorage.getItem("mesa_cfg")||"{}");}catch(e){cfg={}}cfg.repo=cfg.repo||"";cfg.token=cfg.token||""}
 function guardarCfg(){try{localStorage.setItem("mesa_cfg",JSON.stringify(cfg))}catch(e){}}
 try{enviados=new Set(JSON.parse(localStorage.getItem("mesa_enviados")||"[]"))}catch(e){}
+// La salvación automática se tira sola y el DM retira el pedido al recibirla: su resultado queda a la vista,
+// arriba en cualquier página, hasta «Entendido» (GT-ERR-137).
+let ultimaAuto=null;try{ultimaAuto=JSON.parse(localStorage.getItem("mesa_ultima_auto")||"null")}catch(e){}
+function guardarAuto(){try{localStorage.setItem("mesa_ultima_auto",JSON.stringify(ultimaAuto))}catch(e){}}
+function pintarAuto(){
+  if(pedido&&ultimaAuto&&!ultimaAuto.visto&&pedido.id!==ultimaAuto.id){ultimaAuto.visto=true;guardarAuto();$("resultado").hidden=true}
+  const esAuto=!!pedido?.automatica,ver=!pedido&&ultimaAuto&&!ultimaAuto.visto;
+  $("tirar").hidden=esAuto||!!ver;$("cerrarAuto").hidden=!ver;
+  if(esAuto&&!enviados.has(pedido.id))$("estado").textContent="Salvación automática: la app la tira sola y se la manda al DM.";
+  if(!ver)return;
+  $("panelPedido").hidden=false;$("nombre").textContent=ultimaAuto.nombre+" (automática)";$("mod").textContent=ultimaAuto.expresion+" "+fmtMod(ultimaAuto.mod);$("porQuePedido").hidden=true;
+  $("dado").textContent=ultimaAuto.dados.join(" · ")+(ultimaAuto.descartado!=null?` (y ${ultimaAuto.descartado})`:"");$("total").textContent=`${ultimaAuto.mod>=0?"+":"−"} ${Math.abs(ultimaAuto.mod)} = ${ultimaAuto.total}`;$("resultado").hidden=false;
+  $("estado").textContent="La app la tiró sola y el resultado ya le llegó al DM.";
+}
 function marcarEnviado(id){enviados.add(id);try{localStorage.setItem("mesa_enviados",JSON.stringify([...enviados].slice(-50)))}catch(e){}}
 
 const fmtMod=m=>(m>=0?"+":"")+m;
@@ -615,6 +630,7 @@ function pintar(e){
   }else{$("nombre").textContent="Ninguna por ahora";$("mod").textContent="";$("tirar").disabled=true}
   if(e.actualizado)$("hora").textContent="Actualizado "+new Date(e.actualizado).toLocaleTimeString();
   $("panelPedido").hidden=!pedido;
+  pintarAuto();
   pintarCombate(e.combate||null);
   pintarSubida(e.subida||null);
   pintarPiso(e.combate?null:(e.exploracion||null));
@@ -1203,7 +1219,8 @@ const RAICES_VISTA={
  mesa:["panelMesa"],exploracion:["panelPiso"],
  combate:["panelCombate","panelTurno","panelReaccion","panelDano","salvacionesAutoVista","panelConm"],
  personaje:["hoja","panelShalock","panelSubida"],equipo:["panelEquipo"],forja:["forja"],
- registro:["panelRegistro","panelPedido"],conexion:["ajustes"]
+ // La tirada pedida va arriba en todas las páginas, no solo en Registro (GT-ERR-137).
+ registro:["panelRegistro"],conexion:["ajustes"]
 };
 function envolverDesdeHasta(desde,hasta,id){
  if($(id))return;const p=desde.parentNode,c=document.createElement("div");c.id=id;p.insertBefore(c,desde);
@@ -1221,7 +1238,7 @@ function armarNavegacion(){
  envolverDesdeHasta($("preguntaForzada"),$("soloTextoPiso"),"viajeVista");
  envolverDesdeHasta($("tituloPiso"),$("lugaresPiso"),"mapaExploracionVista");
  $("panelPiso").insertBefore($("provPiso"),$("cargaPiso"));
- const auto=document.createElement("section");auto.id="salvacionesAutoVista";auto.className="panel";$("arriba").appendChild(auto);
+ const auto=document.createElement("section");auto.id="salvacionesAutoVista";auto.className="panel";auto.hidden=true;$("arriba").appendChild(auto);
  // La subida pertenece a Personaje, no a la página Mesa: queda como bloque independiente.
  $("panelShalock").parentNode.insertBefore($("panelSubida"),$("panelShalock").nextSibling);
  for(const x of VISTAS_APP)for(const z of x.subs)for(const id of z[2])$(id)?.classList.add("ancla-subvista");
@@ -1231,7 +1248,12 @@ function armarNavegacion(){
   if(e.key==="Tab"){const bs=[...$("menuApp").querySelectorAll("button:not(:disabled)")],primero=bs[0],ultimo=bs[bs.length-1];if(e.shiftKey&&document.activeElement===primero){e.preventDefault();ultimo.focus()}else if(!e.shiftKey&&document.activeElement===ultimo){e.preventDefault();primero.focus()}}});
  cambiarVista(vistaApp.seccion,vistaApp.sub,false);
 }
-function abrirMenuApp(){focoAntesMenu=document.activeElement;$("menuApp").hidden=false;$("fondoMenu").hidden=false;$("abrirMenu").setAttribute("aria-expanded","true");$("cerrarMenu").focus()}
+// Una subsección sin contenido no se dibuja: el menú lo dice en vez de saltar a nada (GT-ERR-138).
+let botonesSub=[];
+function subVisible(z){return z[2].some(id=>{let n=$(id);if(!n)return false;while(n&&n!==document.body){if(n.hidden||n.classList.contains("vista-oculta")||(typeof getComputedStyle==="function"&&getComputedStyle(n).display==="none"))return false;n=n.parentElement}return true})}
+function marcarSubsVacias(){const v=VISTAS_APP.find(x=>x.id===vistaApp.seccion);if(!v)return;const bs=botonesSub;
+ v.subs.forEach((z,i)=>{const b=bs[i];if(!b)return;const lleno=subVisible(z);b.textContent=z[1]+(lleno?"":" — nada ahora");b.disabled=!lleno})}
+function abrirMenuApp(){marcarSubsVacias();focoAntesMenu=document.activeElement;$("menuApp").hidden=false;$("fondoMenu").hidden=false;$("abrirMenu").setAttribute("aria-expanded","true");$("cerrarMenu").focus()}
 function cerrarMenuApp(){$("menuApp").hidden=true;$("fondoMenu").hidden=true;$("abrirMenu").setAttribute("aria-expanded","false");focoAntesMenu?.focus()}
 function cambiarVista(seccion,sub,volverArriba=true){
  const v=VISTAS_APP.find(x=>x.id===seccion)||VISTAS_APP[0],sv=v.subs.find(x=>x[0]===sub)||v.subs[0];vistaApp={seccion:v.id,sub:sv[0]};pestana=v.id;$("abrirMenu").textContent="☰ "+v.nombre;
@@ -1242,14 +1264,14 @@ function cambiarVista(seccion,sub,volverArriba=true){
  if(v.id==="forja"){$("forja").hidden=false;if(forjaCat)armarForja();else cargarForja()}
  if(v.id==="conexion")$("ajustes").hidden=false;
  const m=$("seccionesMenu");m.replaceChildren();for(const x of VISTAS_APP){const b=document.createElement("button");b.className="sec";b.textContent=x.nombre;b.setAttribute("aria-current",x.id===v.id?"page":"false");b.onclick=()=>{cambiarVista(x.id,x.subs[0][0]);cerrarMenuApp()};m.appendChild(b);
-  if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q)}m.appendChild(grupo)}}
+  if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";botonesSub=[];for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q);botonesSub.push(q)}m.appendChild(grupo)}}
  // Todas las subsecciones de la página permanecen visibles; el menú solo salta a su ancla.
  if(volverArriba){const ancla=sv[2].map(id=>$(id)).find(Boolean);ancla?.scrollIntoView?.({block:"start",behavior:"instant"})}
 }
 function elegirPestana(nombre){const x={mesa:["mesa","relato"],turno:["combate","acciones"],mapa:["combate","mapa"],equipo:["equipo","inventario"],shalock:["personaje","recursos"],registro:["registro","registro"]}[nombre]||[nombre,null];cambiarVista(...x)}
 function pestanas(cb){document.querySelector(".wrap").classList.remove("con-pestanas");$("tabs").hidden=true;armarNavegacion();turnoVisto=cb?.turno||null;
  const rp=cb?.reaccion_pendiente,rf=rp?JSON.stringify(rp):null;if(rf&&rf!==reaccionVista)cambiarVista("combate","reaccion");reaccionVista=rf;
- const rs=cb?.shalock?.salvaciones_automaticas||[];$("salvacionesAutoVista").innerHTML='<div class="eyebrow">Salvaciones automáticas</div>'+rs.map(r=>`<p>${esc(r.concentracion?"Concentración":"Salvación "+r.car)}: ${r.total} · ${r.exito?"éxito":"fallo"}</p>`).join("");
+ const rs=cb?.shalock?.salvaciones_automaticas||[];$("salvacionesAutoVista").hidden=!rs.length;$("salvacionesAutoVista").innerHTML='<div class="eyebrow">Salvaciones automáticas</div>'+rs.map(r=>`<p>${esc(r.concentracion?"Concentración":"Salvación "+r.car)}: ${r.total} · ${r.exito?"éxito":"fallo"}</p>`).join("");
 }
 
 
@@ -2034,6 +2056,7 @@ async function avanzarAutomaticos(){
       const ts=Date.now();envio={id:`${ts}-${Math.random().toString(36).slice(2,7)}`,t:{tipo:"salvacion_auto",automatica:true,pedido:pedido.id,nombre:pedido.nombre,expresion:pedido.expresion,dados:ds,mod,total:ds.reduce((a,b)=>a+b,0)+mod,modo:pedido.modo,descartado,ts}};localStorage.setItem(clave,JSON.stringify(envio));
     }
     await escribirTirada(envio.id,envio.t,"salvación automática del jugador");marcarEnviado(pedido.id);$("estado").textContent=`Salvación automática: ${envio.t.total}. Resultado enviado al DM.`;$("tirar").disabled=true;
+    if(ultimaAuto?.id!==pedido.id){ultimaAuto={id:pedido.id,nombre:pedido.nombre||"Salvación",expresion:pedido.expresion||"1d20",dados:envio.t.dados,mod:envio.t.mod,total:envio.t.total,descartado:envio.t.descartado,visto:false};guardarAuto()}
   }
   if(!combate||!enCurso?.impactos_tirados)return;
   if(partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida))return;
@@ -2245,6 +2268,7 @@ $("abrirAjustes").addEventListener("click",()=>{$("ajustes").hidden=!$("ajustes"
 $("guardar").addEventListener("click",()=>{cfg.repo=$("repo").value.trim();cfg.token=$("token").value.trim();guardarCfg();$("ajustes").hidden=true;arrancar()});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)sondear()});
 
+$("cerrarAuto").addEventListener("click",()=>{if(ultimaAuto){ultimaAuto.visto=true;guardarAuto()}$("resultado").hidden=true;$("estado").textContent="";$("panelPedido").hidden=!pedido;pintarAuto()});
 $("tirar").addEventListener("click",async()=>{
   if(!pedido)return;
   $("tirar").disabled=true;
