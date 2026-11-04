@@ -1248,12 +1248,7 @@ function armarNavegacion(){
   if(e.key==="Tab"){const bs=[...$("menuApp").querySelectorAll("button:not(:disabled)")],primero=bs[0],ultimo=bs[bs.length-1];if(e.shiftKey&&document.activeElement===primero){e.preventDefault();ultimo.focus()}else if(!e.shiftKey&&document.activeElement===ultimo){e.preventDefault();primero.focus()}}});
  cambiarVista(vistaApp.seccion,vistaApp.sub,false);
 }
-// Una subsección sin contenido no se dibuja: el menú lo dice en vez de saltar a nada (GT-ERR-138).
-let botonesSub=[];
-function subVisible(z){return z[2].some(id=>{let n=$(id);if(!n)return false;while(n&&n!==document.body){if(n.hidden||n.classList.contains("vista-oculta")||(typeof getComputedStyle==="function"&&getComputedStyle(n).display==="none"))return false;n=n.parentElement}return true})}
-function marcarSubsVacias(){const v=VISTAS_APP.find(x=>x.id===vistaApp.seccion);if(!v)return;const bs=botonesSub;
- v.subs.forEach((z,i)=>{const b=bs[i];if(!b)return;const lleno=subVisible(z);b.textContent=z[1]+(lleno?"":" — nada ahora");b.disabled=!lleno})}
-function abrirMenuApp(){marcarSubsVacias();focoAntesMenu=document.activeElement;$("menuApp").hidden=false;$("fondoMenu").hidden=false;$("abrirMenu").setAttribute("aria-expanded","true");$("cerrarMenu").focus()}
+function abrirMenuApp(){focoAntesMenu=document.activeElement;$("menuApp").hidden=false;$("fondoMenu").hidden=false;$("abrirMenu").setAttribute("aria-expanded","true");$("cerrarMenu").focus()}
 function cerrarMenuApp(){$("menuApp").hidden=true;$("fondoMenu").hidden=true;$("abrirMenu").setAttribute("aria-expanded","false");focoAntesMenu?.focus()}
 function cambiarVista(seccion,sub,volverArriba=true){
  const v=VISTAS_APP.find(x=>x.id===seccion)||VISTAS_APP[0],sv=v.subs.find(x=>x[0]===sub)||v.subs[0];vistaApp={seccion:v.id,sub:sv[0]};pestana=v.id;$("abrirMenu").textContent="☰ "+v.nombre;
@@ -1264,7 +1259,7 @@ function cambiarVista(seccion,sub,volverArriba=true){
  if(v.id==="forja"){$("forja").hidden=false;if(forjaCat)armarForja();else cargarForja()}
  if(v.id==="conexion")$("ajustes").hidden=false;
  const m=$("seccionesMenu");m.replaceChildren();for(const x of VISTAS_APP){const b=document.createElement("button");b.className="sec";b.textContent=x.nombre;b.setAttribute("aria-current",x.id===v.id?"page":"false");b.onclick=()=>{cambiarVista(x.id,x.subs[0][0]);cerrarMenuApp()};m.appendChild(b);
-  if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";botonesSub=[];for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q);botonesSub.push(q)}m.appendChild(grupo)}}
+  if(x.id===v.id){const grupo=document.createElement("div");grupo.className="menu-sub";for(const z of x.subs){const q=document.createElement("button");q.className="sec";q.textContent=z[1];q.setAttribute("aria-current",z[0]===sv[0]?"page":"false");q.onclick=()=>{cambiarVista(x.id,z[0]);cerrarMenuApp()};grupo.appendChild(q)}m.appendChild(grupo)}}
  // Todas las subsecciones de la página permanecen visibles; el menú solo salta a su ancla.
  if(volverArriba){const ancla=sv[2].map(id=>$(id)).find(Boolean);ancla?.scrollIntoView?.({block:"start",behavior:"instant"})}
 }
