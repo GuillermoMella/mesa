@@ -2076,6 +2076,8 @@ async function avanzarAutomaticos(){
   if(!combate||!enCurso?.impactos_tirados)return;
   if(partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida))return;
   const lote=combate.shalock.lote_ataque;
+  // Un lote ya terminado (los impactos de un turno anterior) no se espera: se suelta para no bloquear el turno nuevo (GT-ERR-141).
+  if(lote?.terminado&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote)){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}
   if(lote&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote))return;
   const v=combate.resolucion?.tirada===enCurso.tirada?combate.resolucion:null,s=combate.shalock.serie_impactos,entrada=enCurso.impactos_tirados[enCurso.indice_impacto||0];
   if(v?.impacta&&!enCurso.enviado&&!entrada.decision_dano){
