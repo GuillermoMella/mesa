@@ -1869,6 +1869,7 @@ function revisar(){
   [["ad",ad],["ac",ac]].forEach(([p,o])=>{if(!o||!o.requiere_ver)return;const objs=(o.objetivo==="aliados"||o.objetivo==="enemigos")?(o.objetivo==="aliados"?aliados():enemigos()).filter(x=>form.c[`${p}_obj_${x}`]):[form.c[`${p}_objetivo`]];
     objs.filter(Boolean).forEach(n=>{const cc=combate.combatientes.find(x=>x.id===n);if(cc&&cc.lo_ves===false)bloqueos.push(`${o.nombre}: no ves a ${n}, y tiene que ser una criatura que puedas ver.`)})});
   if(!pasos.length&&!mov.mv.length&&!s.turno_abierto)bloqueos.push("Agrega al menos un paso con «+».");
+  if(enCursoViejo()){enCurso=null;guardarEnCurso();pintarDano()}
   if(enCurso||combate.shalock.serie_impactos&&!combate.shalock.serie_impactos.terminada)bloqueos.push("Resuelve los impactos en curso antes de enviar otra acción.");
   $("avisos").innerHTML=[...bloqueos.map(x=>`<span style="color:var(--bad)">${esc(x)}</span>`),...avisos.map(esc)].join("<br>");
   $("enviarTurno").disabled=bloqueos.length>0;
@@ -1974,8 +1975,19 @@ try{enCurso=JSON.parse(localStorage.getItem("mesa_en_curso")||"null")}catch(e){}
 function guardarEnCurso(){try{localStorage.setItem("mesa_en_curso",JSON.stringify(enCurso))}catch(e){}}
 
 // Paso 2: con el veredicto, el daño (y el Castigo divino, que se decide al impactar).
+// Un ataque enviado antes de que empezara este turno de Shalock, del que el motor ya no guarda lote ni serie,
+// quedó en un turno anterior: se suelta para no bloquear el turno nuevo (GT-ERR-141).
+function enCursoViejo(){
+  if(!combate||!enCurso||combate.shalock?.lote_ataque||combate.shalock?.serie_impactos)return false;
+  const desde=Number(String(enCurso.raiz_lote||enCurso.serie||enCurso.tirada||"").split("-")[0]),inicio=combate.turno_shalock_desde_ms;
+  // Dos minutos de margen por si el reloj del teléfono atrasa respecto del motor; y nunca uno que espera subir.
+  if(partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida))return false;
+  return !!(inicio&&desde&&desde<inicio-120000);
+}
 function pintarDano(){
-  const p=$("panelDano"); if(!combate||!enCurso){p.hidden=true;return}
+  const p=$("panelDano");
+  if(enCursoViejo()){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent=""}
+  if(!combate||!enCurso){p.hidden=true;return}
   const lote=combate.shalock.lote_ataque;
   if(lote&&enCurso.impactos_tirados&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote)){
     p.hidden=false;$("veredicto").textContent=(lote.resultados||[]).map(r=>`Impacto ${r.indice+1} contra ${r.objetivo}: ${r.critico?"crítico":r.impacta?"impacta":"falla"}${r.dano!=null?`, ${r.dano} de daño`:""}`).join(" · ");
@@ -2077,8 +2089,7 @@ async function avanzarAutomaticos(){
   if(partesTurno.some(x=>x.id+".json"===enCurso.tirada&&!x.subida))return;
   const lote=combate.shalock.lote_ataque;
   // Un ataque enviado antes de que empezara este turno, del que el motor ya no guarda lote ni serie, quedó atrás (GT-ERR-141).
-  {const desde=Number(String(enCurso.raiz_lote||enCurso.tirada||"").split("-")[0]),inicio=combate.turno_shalock_desde_ms;
-   if(!lote&&!combate.shalock.serie_impactos&&inicio&&desde&&desde<inicio){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}}
+  if(enCursoViejo()){pintarDano();revisar();return}
   // Un lote ya terminado (los impactos de un turno anterior) no se espera: se suelta para no bloquear el turno nuevo (GT-ERR-141).
   if(lote?.terminado&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote)){enCurso=null;guardarEnCurso();$("cerrarDano").hidden=true;$("resDano").textContent="";pintarDano();revisar();return}
   if(lote&&(lote.raiz===enCurso.tirada||lote.raiz===enCurso.raiz_lote))return;
