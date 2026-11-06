@@ -37,6 +37,7 @@ input{font:inherit;font-family:var(--mono);font-size:.85rem;background:var(--bg)
 .dado{font-family:var(--mono);font-size:2.6rem;line-height:1}
 .total{font-family:var(--mono);font-size:1.2rem;color:var(--muted)}
 .estado{font-size:.9rem;color:var(--muted);overflow-wrap:anywhere}
+.resumen-escena{margin:.2rem 0 .5rem;padding:.4rem .6rem;border:1px solid var(--line,#8884);border-radius:6px;line-height:1.45}
 .estado.ok{color:var(--ok)} .estado.bad{color:var(--bad)}
 .pie{font-size:.8rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .turno{font-family:var(--display);font-size:1.05rem}
@@ -455,6 +456,7 @@ select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--
   <section id="panelMesa" class="panel pane" data-pane="mesa" aria-live="polite">
     <div id="historiaVista">
       <div class="eyebrow">Narración</div>
+      <div class="estado resumen-escena" id="resumenEscena" hidden></div>
       <div id="relato" role="log" aria-label="Conversación de la partida" aria-live="polite"></div>
       <div class="estado" id="estadoRelato"></div>
       <p id="mensaje" hidden></p>
@@ -908,7 +910,23 @@ function pintarCarga(c){
   if(c.guardados.length)h+=`<div class="estado">Guardado fuera: ${c.guardados.map(g=>`${esc(g.objeto)} (${esc(g.donde)})`).join("; ")}</div>`;
   if(c.sin_peso.length)h+=`<div class="estado">Sin peso asignado todavía: ${c.sin_peso.map(esc).join("; ")}</div>`;
   $("cargaDetalle").innerHTML=h}
+// Encima de la narración: fecha y hora en 24 h, marcha desde el último descanso largo, cuándo pueden dormir y
+// el agotamiento de cada uno, para retomar sin adivinar en qué están (GT-ERR-140).
+function pintarResumen(p){
+  const el=$("resumenEscena"); if(!el)return; el.hidden=!p; if(!p)return;
+  const f=/D(\d+)T(\d\d):(\d\d)/.exec(p.fecha||""), hm=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)} h${m%60?` ${m%60} min`:""}`};
+  const hoy=p.marcha_hoy||0, lim=p.horas_de_marcha||8, lineas=[];
+  if(f)lineas.push(`<b>Día ${Number(f[1])}, ${f[2]}:${f[3]}</b> · piso ${p.piso}`);
+  lineas.push(hoy<0.05?"Desde el último descanso largo todavía no marcharon."
+    :`Marcha desde el último descanso largo: ${hm(hoy)}${hoy>lim+1e-9?` <span style="color:var(--warn)">(pasaron las ${lim} h: seguir es marcha forzada)</span>`:""}.`);
+  const u=/D(\d+)T(\d\d):(\d\d)/.exec(p.ultimo_descanso_largo||"");
+  if(u&&f){const ahora=Number(f[1])*1440+Number(f[2])*60+Number(f[3]), desde=Number(u[1])*1440+Number(u[2])*60+Number(u[3])+1440;
+    lineas.push(ahora>=desde?"Descanso largo: ya pueden hacerlo.":`Descanso largo: desde el día ${Math.floor(desde/1440)} a las ${String(Math.floor(desde%1440/60)).padStart(2,"0")}:${String(desde%60).padStart(2,"0")}.`)}
+  const ag=Object.entries(p.agotamientos||{}).filter(([,n])=>n>0);
+  lineas.push(ag.length?`Agotamiento: ${ag.map(([q,n])=>`${esc(q)} ${n}`).join(" · ")}`:"Nadie tiene agotamiento.");
+  el.innerHTML=lineas.join("<br>")}
 function pintarPiso(p){
+  pintarResumen(p);
   p=aplicarNombresMapa(p);piso=p; $("panelPiso").hidden=!p; if(!p)return;
   $("tituloPiso").textContent=`Piso ${p.piso}`;
   const R=14, W=Math.sqrt(3)*R, cx=c=>R*1.5*c+R*1.2, cy=(c,r)=>W*(r+0.5*(c&1))+W*0.6;
